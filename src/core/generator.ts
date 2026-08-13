@@ -1041,6 +1041,23 @@ function generateContractsFileContent(metadata: ContractMetadata): string {
 			} else {
 				const tsType = schemaToTS(schemaObj, "", allSchemas, undefined, allComponents);
 				lines.push(`export type ${typeName} = ${tsType};`);
+				// Named string enum → additionally emit a runtime const object
+				// (a type alias and a const may share a name) so consumers can
+				// iterate/reference values without hand-writing a mirror —
+				// erased unions have no runtime values. Non-string / mixed
+				// enums stay union-only. Issue #119.
+				if (
+					Array.isArray(schemaObj.enum) &&
+					schemaObj.enum.length > 0 &&
+					schemaObj.enum.every((v) => typeof v === "string")
+				) {
+					const values = [...new Set(schemaObj.enum as string[])];
+					lines.push(`export const ${typeName} = {`);
+					for (const value of values) {
+						lines.push(`\t${formatPropertyKey(value)}: ${JSON.stringify(value)},`);
+					}
+					lines.push(`} as const;`);
+				}
 			}
 			lines.push(``);
 		}

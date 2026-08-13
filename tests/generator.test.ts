@@ -33,6 +33,55 @@ describe("generator: end-to-end snapshots", () => {
 		}
 	});
 
+	it("#119: named string enums emit a runtime const object + derived union; mixed enums stay union-only", async () => {
+		const spec = {
+			openapi: "3.0.3",
+			info: { title: "Enums", version: "1.0.0" },
+			paths: {
+				"/actions": {
+					get: {
+						operationId: "listActions",
+						responses: {
+							"200": {
+								description: "ok",
+								content: {
+									"application/json": {
+										schema: { $ref: "#/components/schemas/Action" },
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			components: {
+				schemas: {
+					Action: {
+						type: "string",
+						enum: ["invalidate", "refresh", "hub.mode"],
+					},
+					Mixed: { enum: ["a", 1, null] },
+				},
+			},
+		};
+		const { contracts, cleanup } = await runGenerator(spec);
+		try {
+			// The plain union alias is unchanged — the const is purely additive.
+			expect(contracts).toContain(
+				'export type Action = "invalidate" | "refresh" | "hub.mode";',
+			);
+			// Runtime const with value-keyed entries; non-identifier keys quoted.
+			expect(contracts).toContain("export const Action = {");
+			expect(contracts).toContain('\tinvalidate: "invalidate",');
+			expect(contracts).toContain('\t"hub.mode": "hub.mode",');
+			// Mixed (non-all-string) enums stay a plain union type, no const.
+			expect(contracts).toContain('export type Mixed = "a" | 1 | null;');
+			expect(contracts).not.toContain("export const Mixed");
+		} finally {
+			await cleanup();
+		}
+	});
+
 	it("operations header omits the volatile 'Total operations' stat (merge-conflict noise)", async () => {
 		const spec = await loadFixture("petstore.json");
 		const { operations, cleanup } = await runGenerator(spec);
