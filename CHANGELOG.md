@@ -4,6 +4,13 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [2.4.1](https://github.com/ToniChowBea/chowbea-axios/compare/v2.4.0...v2.4.1) (2026-08-13)
+
+
+### Fixed
+
+* **tests:** Raise timeout for git-spawning resolve tests flaking on Windows CI ([#124](https://github.com/ToniChowBea/chowbea-axios/issues/124)) ([06452ba](https://github.com/ToniChowBea/chowbea-axios/commit/06452ba1be42bc4d6167326438bdf3f506446a0f))
+
 ## [2.4.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.3.0...v2.4.0) (2026-08-13)
 
 
