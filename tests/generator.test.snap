@@ -1144,6 +1144,11 @@ export type Create_itemBody = {
 	name: "a\\"b" | "c\\\\d" | "normal";
 	"hub.mode"?: string;
 };
+export const Create_itemBodyName = {
+	A_B: "a\\"b",
+	C_D: "c\\\\d",
+	NORMAL: "normal",
+} as const;
 
 // Request body: POST /ping — name already declared as a Schema Model above; skipped.
 
@@ -1396,6 +1401,11 @@ export interface Pet {
 	tag?: string;
 	status?: "available" | "pending" | "sold";
 }
+export const PetStatus = {
+	AVAILABLE: "available",
+	PENDING: "pending",
+	SOLD: "sold",
+} as const;
 
 /**
  * Schema: NewPet

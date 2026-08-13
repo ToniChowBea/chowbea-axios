@@ -53,6 +53,28 @@ describe("generator: end-to-end snapshots", () => {
 						},
 					},
 				},
+				"/tokens": {
+					post: {
+						operationId: "createRealtimeSubscriptionToken",
+						requestBody: {
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										required: ["kind"],
+										properties: {
+											kind: {
+												type: "string",
+												enum: ["campus-staff", "school-staff"],
+											},
+										},
+									},
+								},
+							},
+						},
+						responses: { "200": { description: "ok" } },
+					},
+				},
 			},
 			components: {
 				schemas: {
@@ -61,6 +83,18 @@ describe("generator: end-to-end snapshots", () => {
 						enum: ["invalidate", "refresh", "hub.mode"],
 					},
 					Mixed: { enum: ["a", 1, null] },
+					AuthMeRuleDto: {
+						type: "object",
+						required: ["action"],
+						properties: {
+							action: {
+								type: "string",
+								enum: ["manage", "school-staff", "school_staff", "2fa"],
+							},
+							inverted: { type: "boolean" },
+							count: { enum: [1, 2] },
+						},
+					},
 				},
 			},
 		};
@@ -77,6 +111,23 @@ describe("generator: end-to-end snapshots", () => {
 			// Mixed (non-all-string) enums stay a plain union type, no const.
 			expect(contracts).toContain('export type Mixed = "a" | 1 | null;');
 			expect(contracts).not.toContain("export const Mixed");
+			// Inline property enums on object schemas get <Owner><Prop> consts
+			// with value-derived SCREAMING_SNAKE keys; empty/colliding
+			// derivations fall back to the quoted value; non-string property
+			// enums get nothing.
+			expect(contracts).toContain("export const AuthMeRuleDtoAction = {");
+			expect(contracts).toContain('\tMANAGE: "manage",');
+			expect(contracts).toContain('\tSCHOOL_STAFF: "school-staff",');
+			expect(contracts).toContain('\t"school_staff": "school_staff",');
+			expect(contracts).toContain('\t_2FA: "2fa",');
+			expect(contracts).not.toContain("AuthMeRuleDtoCount");
+			expect(contracts).not.toContain("AuthMeRuleDtoInverted");
+			// Inline request-body objects get the same treatment, named after
+			// the generated Body type.
+			expect(contracts).toContain(
+				"export const CreateRealtimeSubscriptionTokenBodyKind = {",
+			);
+			expect(contracts).toContain('\tCAMPUS_STAFF: "campus-staff",');
 		} finally {
 			await cleanup();
 		}
