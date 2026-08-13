@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The executeResolve tests spawn a real git repo (init/commit/branch/merge)
+// plus a full generator run per test; Windows CI runners occasionally blow
+// the default 5s budget under load. Issue #123.
+vi.setConfig({ testTimeout: 30_000 });
 
 import { executeResolve, partitionConflicts } from "../src/core/actions/resolve.js";
 import { DEFAULT_CONFIG, generateConfigTemplate } from "../src/core/config.js";
