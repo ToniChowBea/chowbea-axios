@@ -4,6 +4,18 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [2.4.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.3.0...v2.4.0) (2026-08-13)
+
+
+### Added
+
+* **generator:** Emit const objects for named string enums ([#120](https://github.com/ToniChowBea/chowbea-axios/issues/120)) ([a60a956](https://github.com/ToniChowBea/chowbea-axios/commit/a60a956f7b06540e5824a2d4d4472e164f57ea5a))
+
+
+### Fixed
+
+* **ci:** Update repo slug after rename so release-please runs again ([#121](https://github.com/ToniChowBea/chowbea-axios/issues/121)) ([53a92a4](https://github.com/ToniChowBea/chowbea-axios/commit/53a92a4ea61a3220bd53586f6875addb1bb7cd14))
+
 ## [2.3.0](https://github.com/oddFEELING/chowbea-axios/compare/v2.2.0...v2.3.0) (2026-06-20)
 
 
