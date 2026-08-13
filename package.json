@@ -75,11 +75,11 @@
   ],
   "homepage": "https://axios.chowbea.com",
   "bugs": {
-    "url": "https://github.com/oddFEELING/chowbea-axios/issues"
+    "url": "https://github.com/ToniChowBea/chowbea-axios/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/oddFEELING/chowbea-axios.git"
+    "url": "git+ssh://git@github.com/ToniChowBea/chowbea-axios.git"
   },
   "engines": {
     "node": ">=20.0.0"

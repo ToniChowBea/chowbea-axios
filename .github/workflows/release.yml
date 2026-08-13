@@ -95,7 +95,7 @@ jobs:
     # not forks or accidental tag mirrors. (Trusted Publisher config on
     # npmjs is already scoped to this repo, but the extra guard avoids
     # spending CI minutes on doomed publishes from forks.)
-    if: github.repository == 'oddFEELING/chowbea-axios'
+    if: github.repository == 'ToniChowBea/chowbea-axios'
     env:
       # Unified tag reference for both triggers:
       #   - push:tags        → github.ref_name is the tag (e.g. "v2.0.0")
