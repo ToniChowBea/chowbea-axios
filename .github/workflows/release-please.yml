@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Defense-in-depth: only run on the canonical repo.
-    if: github.repository == 'oddFEELING/chowbea-axios'
+    if: github.repository == 'ToniChowBea/chowbea-axios'
     steps:
       - name: Run release-please
         id: release

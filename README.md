@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/oddFEELING/chowbea-axios/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/oddFEELING/chowbea-axios/ci.yml?branch=main&style=flat-square&color=10b981" alt="CI" /></a>
-  <a href="https://github.com/oddFEELING/chowbea-axios/stargazers"><img src="https://img.shields.io/github/stars/oddFEELING/chowbea-axios?style=flat-square&color=10b981" alt="GitHub stars" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea-axios/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ToniChowBea/chowbea-axios/ci.yml?branch=main&style=flat-square&color=10b981" alt="CI" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea-axios/stargazers"><img src="https://img.shields.io/github/stars/ToniChowBea/chowbea-axios?style=flat-square&color=10b981" alt="GitHub stars" /></a>
   <a href="https://www.npmjs.com/package/chowbea-axios"><img src="https://img.shields.io/npm/v/chowbea-axios?style=flat-square&color=10b981" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/chowbea-axios"><img src="https://img.shields.io/npm/dm/chowbea-axios?style=flat-square&color=10b981" alt="npm downloads" /></a>
-  <a href="https://github.com/oddFEELING/chowbea-axios/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10b981?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea-axios/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10b981?style=flat-square" alt="license" /></a>
 </p>
 
 ---
@@ -182,8 +182,8 @@ Scaffold them via `chowbea-axios init --with-vite-plugins` or `chowbea-axios plu
 If chowbea-axios helps you ship faster, consider giving it a star! It helps others discover the project and motivates continued development.
 
 <p align="center">
-  <a href="https://github.com/oddFEELING/chowbea-axios">
-    <img src="https://img.shields.io/badge/⭐_Star_on_GitHub-oddFEELING%2Fchowbea--axios-10b981?style=for-the-badge&logo=github" alt="Star on GitHub" />
+  <a href="https://github.com/ToniChowBea/chowbea-axios">
+    <img src="https://img.shields.io/badge/⭐_Star_on_GitHub-ToniChowBea%2Fchowbea--axios-10b981?style=for-the-badge&logo=github" alt="Star on GitHub" />
   </a>
 </p>
 
