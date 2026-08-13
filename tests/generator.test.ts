@@ -33,6 +33,106 @@ describe("generator: end-to-end snapshots", () => {
 		}
 	});
 
+	it("#119: named string enums emit a runtime const object + derived union; mixed enums stay union-only", async () => {
+		const spec = {
+			openapi: "3.0.3",
+			info: { title: "Enums", version: "1.0.0" },
+			paths: {
+				"/actions": {
+					get: {
+						operationId: "listActions",
+						responses: {
+							"200": {
+								description: "ok",
+								content: {
+									"application/json": {
+										schema: { $ref: "#/components/schemas/Action" },
+									},
+								},
+							},
+						},
+					},
+				},
+				"/tokens": {
+					post: {
+						operationId: "createRealtimeSubscriptionToken",
+						requestBody: {
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										required: ["kind"],
+										properties: {
+											kind: {
+												type: "string",
+												enum: ["campus-staff", "school-staff"],
+											},
+										},
+									},
+								},
+							},
+						},
+						responses: { "200": { description: "ok" } },
+					},
+				},
+			},
+			components: {
+				schemas: {
+					Action: {
+						type: "string",
+						enum: ["invalidate", "refresh", "hub.mode"],
+					},
+					Mixed: { enum: ["a", 1, null] },
+					AuthMeRuleDto: {
+						type: "object",
+						required: ["action"],
+						properties: {
+							action: {
+								type: "string",
+								enum: ["manage", "school-staff", "school_staff", "2fa"],
+							},
+							inverted: { type: "boolean" },
+							count: { enum: [1, 2] },
+						},
+					},
+				},
+			},
+		};
+		const { contracts, cleanup } = await runGenerator(spec);
+		try {
+			// The plain union alias is unchanged — the const is purely additive.
+			expect(contracts).toContain(
+				'export type Action = "invalidate" | "refresh" | "hub.mode";',
+			);
+			// Runtime const with value-keyed entries; non-identifier keys quoted.
+			expect(contracts).toContain("export const Action = {");
+			expect(contracts).toContain('\tinvalidate: "invalidate",');
+			expect(contracts).toContain('\t"hub.mode": "hub.mode",');
+			// Mixed (non-all-string) enums stay a plain union type, no const.
+			expect(contracts).toContain('export type Mixed = "a" | 1 | null;');
+			expect(contracts).not.toContain("export const Mixed");
+			// Inline property enums on object schemas get <Owner><Prop> consts
+			// with value-derived SCREAMING_SNAKE keys; empty/colliding
+			// derivations fall back to the quoted value; non-string property
+			// enums get nothing.
+			expect(contracts).toContain("export const AuthMeRuleDtoAction = {");
+			expect(contracts).toContain('\tMANAGE: "manage",');
+			expect(contracts).toContain('\tSCHOOL_STAFF: "school-staff",');
+			expect(contracts).toContain('\t"school_staff": "school_staff",');
+			expect(contracts).toContain('\t_2FA: "2fa",');
+			expect(contracts).not.toContain("AuthMeRuleDtoCount");
+			expect(contracts).not.toContain("AuthMeRuleDtoInverted");
+			// Inline request-body objects get the same treatment, named after
+			// the generated Body type.
+			expect(contracts).toContain(
+				"export const CreateRealtimeSubscriptionTokenBodyKind = {",
+			);
+			expect(contracts).toContain('\tCAMPUS_STAFF: "campus-staff",');
+		} finally {
+			await cleanup();
+		}
+	});
+
 	it("operations header omits the volatile 'Total operations' stat (merge-conflict noise)", async () => {
 		const spec = await loadFixture("petstore.json");
 		const { operations, cleanup } = await runGenerator(spec);

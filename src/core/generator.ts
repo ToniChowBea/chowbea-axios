@@ -639,6 +639,66 @@ function formatPropertyKey(name: string): string {
 }
 
 /**
+ * Derives an identifier key for an enum-const entry from the enum value
+ * (`school-staff` → `SCHOOL_STAFF`). Falls back to the quoted value when the
+ * derivation is empty or collides with a key already used in the same const
+ * (e.g. `school-staff` vs `school_staff`).
+ */
+function enumConstKey(value: string, used: Set<string>): string {
+	const derived = value
+		.replace(/[^a-zA-Z0-9]+/g, "_")
+		.replace(/^_+|_+$/g, "")
+		.toUpperCase();
+	const key = /^[0-9]/.test(derived) ? `_${derived}` : derived;
+	if (!key || used.has(key)) return JSON.stringify(value);
+	used.add(key);
+	return key;
+}
+
+/**
+ * Emits `export const <Owner><Prop> = { ... } as const` objects for the
+ * inline all-string enum properties of an object schema. Enums that only
+ * exist as property enums (never as named component schemas) are erased with
+ * the union type, so without this there is no runtime form to iterate or
+ * reference — the gap that forces hand-written frontend mirrors. Properties
+ * that `$ref` a named enum schema are skipped here: the named schema already
+ * gets its own const. Issue #119.
+ */
+function buildPropertyEnumConsts(
+	ownerName: string,
+	schemaObj: Record<string, unknown>,
+	declaredConstNames: Set<string>,
+): string[] {
+	const properties = schemaObj.properties as Record<string, Record<string, unknown>> | undefined;
+	if (!properties) return [];
+	const lines: string[] = [];
+	for (const [propKey, propSchema] of Object.entries(properties)) {
+		if (!propSchema || typeof propSchema !== "object") continue;
+		const values = propSchema.enum;
+		if (
+			!Array.isArray(values) ||
+			values.length === 0 ||
+			!values.every((v) => typeof v === "string")
+		) {
+			continue;
+		}
+		const constName = `${ownerName}${toPascalCase(sanitizeIdentifier(propKey))}`;
+		if (declaredConstNames.has(constName)) {
+			lines.push(`// Enum const for ${ownerName}.${escapeJsdoc(propKey)} — name ${constName} already declared above; skipped.`);
+			continue;
+		}
+		declaredConstNames.add(constName);
+		const usedKeys = new Set<string>();
+		lines.push(`export const ${constName} = {`);
+		for (const value of [...new Set(values as string[])]) {
+			lines.push(`\t${enumConstKey(value, usedKeys)}: ${JSON.stringify(value)},`);
+		}
+		lines.push(`} as const;`);
+	}
+	return lines;
+}
+
+/**
  * Escapes the JSDoc comment terminator inside a string so it can't close a
  * surrounding `/* ... *\/` block. The replacement is unchanged when the
  * comment is read but the parser no longer matches the literal two-char
@@ -1003,6 +1063,23 @@ function generateContractsFileContent(metadata: ContractMetadata): string {
 	// declarations of the same name.
 	const declaredNames = new Set<string>();
 
+	// Value-namespace declarations (enum consts). Pre-seeded with the const
+	// names of top-level string-enum schemas so a property-derived const
+	// emitted earlier in the loop can't collide with one declared later.
+	const declaredConstNames = new Set<string>();
+	for (const [name, schema] of Object.entries(metadata.schemas)) {
+		const s = schema as Record<string, unknown>;
+		if (
+			s.type !== "object" &&
+			!s.properties &&
+			Array.isArray(s.enum) &&
+			s.enum.length > 0 &&
+			s.enum.every((v) => typeof v === "string")
+		) {
+			declaredConstNames.add(sanitizeIdentifier(name));
+		}
+	}
+
 	// ~ ======= Schema Models ======= ~
 	const schemaEntries = Object.entries(metadata.schemas);
 	if (schemaEntries.length > 0) {
@@ -1035,12 +1112,30 @@ function generateContractsFileContent(metadata: ContractMetadata): string {
 						lines.push(`\t${formatPropertyKey(propKey)}${optional}: ${propType};`);
 					}
 					lines.push(`}`);
+					lines.push(...buildPropertyEnumConsts(typeName, schemaObj, declaredConstNames));
 				} else {
 					lines.push(`export type ${typeName} = Record<string, unknown>;`);
 				}
 			} else {
 				const tsType = schemaToTS(schemaObj, "", allSchemas, undefined, allComponents);
 				lines.push(`export type ${typeName} = ${tsType};`);
+				// Named string enum → additionally emit a runtime const object
+				// (a type alias and a const may share a name) so consumers can
+				// iterate/reference values without hand-writing a mirror —
+				// erased unions have no runtime values. Non-string / mixed
+				// enums stay union-only. Issue #119.
+				if (
+					Array.isArray(schemaObj.enum) &&
+					schemaObj.enum.length > 0 &&
+					schemaObj.enum.every((v) => typeof v === "string")
+				) {
+					const values = [...new Set(schemaObj.enum as string[])];
+					lines.push(`export const ${typeName} = {`);
+					for (const value of values) {
+						lines.push(`\t${formatPropertyKey(value)}: ${JSON.stringify(value)},`);
+					}
+					lines.push(`} as const;`);
+				}
 			}
 			lines.push(``);
 		}
@@ -1118,6 +1213,11 @@ function generateContractsFileContent(metadata: ContractMetadata): string {
 			lines.push(`/** Request body: ${op.method.toUpperCase()} ${escapeJsdoc(op.path)} */`);
 			if (schema) {
 				lines.push(`export type ${typeName} = ${schemaToTS(schema, "", allSchemas, undefined, allComponents)};`);
+				// Inline body objects only — a `$ref` body's enum consts are
+				// emitted with the referenced Schema Model above.
+				if (!schema.$ref) {
+					lines.push(...buildPropertyEnumConsts(typeName, schema, declaredConstNames));
+				}
 			} else {
 				lines.push(`export type ${typeName} = unknown;`);
 			}
