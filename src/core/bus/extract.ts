@@ -94,6 +94,28 @@ function hasMarkerTag(node: ts.Node): boolean {
 	return ts.getJSDocTags(node).some((t) => t.tagName.text === MARKER_TAG);
 }
 
+function typesOnlyError(name: string, file: string, line: number): ExtractError {
+	return {
+		message:
+			`"${name}" is not a type alias, interface, or enum — only types ride the bus in v1 ` +
+			`(classes, consts, and functions are runtime values).`,
+		file,
+		line,
+	};
+}
+
+/** Best-effort declared name for an error message; marked statements aren't always name-bearing. */
+function markedStatementName(stmt: ts.Statement): string {
+	if (ts.isClassDeclaration(stmt) || ts.isFunctionDeclaration(stmt)) {
+		return stmt.name?.text ?? "<anonymous>";
+	}
+	if (ts.isVariableStatement(stmt)) {
+		const first = stmt.declarationList.declarations[0]?.name;
+		return first && ts.isIdentifier(first) ? first.text : "<anonymous>";
+	}
+	return "<anonymous>";
+}
+
 export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: string }): ExtractOutput {
 	const { program, rootDir } = loadProgram(options.projectRoot, options.tsconfigPath);
 	const checker = program.getTypeChecker();
@@ -118,13 +140,7 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 	) => {
 		const kind = kindOf(decl);
 		if (kind === null) {
-			errors.push({
-				message:
-					`"${name}" is not a type alias, interface, or enum — only types ride the bus in v1 ` +
-					`(classes, consts, and functions are runtime values).`,
-				file: registeredAt.file,
-				line: registeredAt.line,
-			});
+			errors.push(typesOnlyError(name, registeredAt.file, registeredAt.line));
 			return;
 		}
 		const sf = decl.getSourceFile();
@@ -166,16 +182,19 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 			continue;
 		}
 
-		// Channel 2: /** @chowbea-export */ markers anywhere.
+		// Channel 2: /** @chowbea-export */ markers anywhere. The tag alone puts a
+		// statement on the bus — even non-type declarations, which then fail with
+		// the same "types only" error a barrel export would get (spec §8).
 		for (const stmt of sf.statements) {
-			const isMarkable =
-				ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt) || ts.isEnumDeclaration(stmt);
-			if (isMarkable && hasMarkerTag(stmt)) {
+			if (!hasMarkerTag(stmt)) continue;
+			if (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt) || ts.isEnumDeclaration(stmt)) {
 				collectDeclaration(stmt, stmt.name.text, markedKey(sf.fileName, rootDir), {
 					file: relFile,
 					line: lineOf(stmt),
 				});
+				continue;
 			}
+			errors.push(typesOnlyError(markedStatementName(stmt), relFile, lineOf(stmt)));
 		}
 	}
 

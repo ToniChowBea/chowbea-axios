@@ -66,4 +66,18 @@ describe("extractBusTypes: sweep", () => {
 			cleanup();
 		}
 	});
+
+	it("marking a non-type declaration reports the types-only error instead of silently dropping it", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/svc.ts": `/** @chowbea-export */\nexport class Svc {}\n/** @chowbea-export */\nexport const LIMIT = 1;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(2);
+			expect(out.errors.every((e) => /only types ride the bus/.test(e.message))).toBe(true);
+			expect(out.barrels).toEqual({});
+		} finally {
+			cleanup();
+		}
+	});
 });
