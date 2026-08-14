@@ -3,9 +3,10 @@ import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { DEFAULT_CONFIG, getOutputPaths } from "../src/core/config.js";
 import { buildBasicAuthHeader } from "../src/core/fetcher.js";
 import { buildManifest, hashText } from "../src/core/bus/manifest.js";
-import { syncBus } from "../src/core/bus/fetch.js";
+import { syncBus, syncBusFromConfig } from "../src/core/bus/fetch.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
 
@@ -144,6 +145,38 @@ describe("syncBus", () => {
 			});
 
 			expect(capturedAuth).toBe(`Basic ${Buffer.from("alice:s3cret").toString("base64")}`);
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("syncBusFromConfig", () => {
+	it("returns null and touches nothing when [bus] isn't configured", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const outputPaths = getOutputPaths(DEFAULT_CONFIG, dir);
+			const result = await syncBusFromConfig(DEFAULT_CONFIG, outputPaths, SILENT_LOGGER);
+			expect(result).toBeNull();
+			expect(existsSync(outputPaths.busCache)).toBe(false);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("runs a real sync against [bus].endpoint when configured — shared by fetch and watch", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const endpoint = await serve(manifest);
+			const config = { ...DEFAULT_CONFIG, bus: { endpoint } };
+			const outputPaths = getOutputPaths(config, dir);
+
+			const result = await syncBusFromConfig(config, outputPaths, SILENT_LOGGER);
+
+			expect(result).toMatchObject({ fetched: true, typeCount: 1, diff: null });
+			expect(existsSync(outputPaths.busCache)).toBe(true);
+			expect(readFileSync(join(outputPaths.busDir, "core.ts"), "utf8")).toContain("export type A = 1;");
 		} finally {
 			cleanup();
 		}

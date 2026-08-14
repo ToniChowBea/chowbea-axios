@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "../../adapters/logger-interface.js";
+import type { ApiConfig, OutputPaths } from "../config.js";
+import { buildBasicAuthHeader, interpolateHeaders, resolveBasicAuthNonInteractive } from "../fetcher.js";
 import { writeBusFiles } from "./emit.js";
 import { diffManifests, parseManifest, type BusDiff, type BusManifest } from "./manifest.js";
 
@@ -69,4 +71,48 @@ export async function syncBus(options: {
 	await writeFile(options.busCachePath, `${JSON.stringify(manifest, null, "\t")}\n`, "utf8");
 	const typeCount = Object.values(manifest.barrels).flat().length;
 	return { fetched: true, typeCount, diff, written };
+}
+
+/**
+ * Runs `syncBus()` using `[bus]`/`[fetch.auth]`/`[fetch.headers]` from a
+ * loaded `ApiConfig`. Returns `null` when `[bus]` isn't configured — the
+ * shared no-op both `fetch` and `watch` need (spec §5/§7: both entry points
+ * sync the bus alongside the spec).
+ *
+ * `[fetch.auth]` and `[fetch.headers]` apply to bus fetches too, same as
+ * spec fetching: Basic Auth is resolved non-interactively (never prompts —
+ * a bus sync must never block on a TTY) and wins over any explicit
+ * Authorization header, matching `fetchOpenApiSpec`'s own precedence.
+ */
+export async function syncBusFromConfig(
+	config: ApiConfig,
+	outputPaths: OutputPaths,
+	logger: Logger,
+): Promise<BusSyncResult | null> {
+	if (!config.bus) return null;
+
+	const headers: Record<string, string> = config.fetch?.headers
+		? interpolateHeaders(config.fetch.headers)
+		: {};
+	if (config.fetch?.auth?.type === "basic") {
+		const auth = resolveBasicAuthNonInteractive(config.fetch.auth);
+		for (const key of Object.keys(headers)) {
+			if (key.toLowerCase() === "authorization") delete headers[key];
+		}
+		headers["Authorization"] = buildBasicAuthHeader(auth);
+	}
+
+	const result = await syncBus({
+		endpoint: config.bus.endpoint,
+		headers: Object.keys(headers).length > 0 ? headers : undefined,
+		busCachePath: outputPaths.busCache,
+		busDir: outputPaths.busDir,
+		logger,
+	});
+	if (result.fetched) {
+		logger.done(`Type bus: ${result.typeCount} type(s) synced`);
+	} else {
+		logger.info("Type bus: unchanged");
+	}
+	return result;
 }

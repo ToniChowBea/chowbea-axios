@@ -14,10 +14,8 @@ import {
 	resolveSpecSource,
 } from "../config.js";
 import {
-	buildBasicAuthHeader,
 	fetchOpenApiSpec,
 	interpolateEnvVars,
-	interpolateHeaders,
 	loadLocalSpecFile,
 	saveSpec,
 } from "../fetcher.js";
@@ -342,37 +340,12 @@ export async function executeFetch(
 		if (clientFiles.client) logger.info(`  - ${outputPaths.client}`);
 	}
 
-	if (config.bus) {
-		const { syncBus } = await import("../bus/fetch.js");
-
-		// [fetch.auth]/[fetch.headers] apply to bus fetches too (spec §5) —
-		// same precedence as fetchOpenApiSpec: Basic Auth wins over any
-		// explicit Authorization header. Resolved non-interactively (no
-		// `prompts` arg) — a bus sync should never block on a TTY prompt.
-		const busHeaders: Record<string, string> = config.fetch?.headers
-			? interpolateHeaders(config.fetch.headers)
-			: {};
-		if (config.fetch?.auth?.type === "basic") {
-			const busAuth = await resolveBasicAuth(config.fetch.auth, logger);
-			for (const key of Object.keys(busHeaders)) {
-				if (key.toLowerCase() === "authorization") delete busHeaders[key];
-			}
-			busHeaders["Authorization"] = buildBasicAuthHeader(busAuth);
-		}
-
-		const busResult = await syncBus({
-			endpoint: config.bus.endpoint,
-			headers: Object.keys(busHeaders).length > 0 ? busHeaders : undefined,
-			busCachePath: outputPaths.busCache,
-			busDir: outputPaths.busDir,
-			logger,
-		});
-		if (busResult.fetched) {
-			logger.done(`Type bus: ${busResult.typeCount} type(s) synced`);
-		} else {
-			logger.info("Type bus: unchanged");
-		}
-	}
+	// [bus]/[fetch.auth]/[fetch.headers] sync the Type Bus alongside the spec
+	// (spec §5/§7). No-ops (returns null, no logging) when [bus] isn't
+	// configured. Shared with watch's runCycle so both entry points stay in
+	// lockstep.
+	const { syncBusFromConfig } = await import("../bus/fetch.js");
+	await syncBusFromConfig(config, outputPaths, logger);
 
 	return {
 		specChanged: true,
