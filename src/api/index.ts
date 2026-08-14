@@ -6,7 +6,7 @@
  *
  *   app.use("/.well-known/chowbea.json", busHandler(readBusManifest()));
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync, type Stats } from "node:fs";
 import path from "node:path";
 
 import { parseManifest, type BusManifest } from "../core/bus/manifest.js";
@@ -48,21 +48,88 @@ function matchesIfNoneMatch(headerValue: string, strongEtag: string): boolean {
 		.includes(strongEtag);
 }
 
-export function busHandler(manifest: BusManifest): (req: BusRequest, res: BusResponse) => void {
-	const body = JSON.stringify(manifest);
-	const etag = `"${manifest.hash}"`;
+interface BusSnapshot {
+	body: string;
+	etag: string;
+}
+
+function snapshotFromManifest(manifest: BusManifest): BusSnapshot {
+	return { body: JSON.stringify(manifest), etag: `"${manifest.hash}"` };
+}
+
+/** Shared response-writing path for both the static and file-backed `busHandler` modes. */
+function writeBusSnapshot(snapshot: BusSnapshot, req: BusRequest, res: BusResponse): void {
+	const ifNoneMatch = req.headers["if-none-match"];
+	const headerValue = Array.isArray(ifNoneMatch) ? ifNoneMatch.join(", ") : ifNoneMatch;
+	if (headerValue !== undefined && matchesIfNoneMatch(headerValue, snapshot.etag)) {
+		res.statusCode = 304;
+		res.setHeader("etag", snapshot.etag);
+		res.end();
+		return;
+	}
+	res.statusCode = 200;
+	res.setHeader("content-type", "application/json");
+	res.setHeader("etag", snapshot.etag);
+	res.end(snapshot.body);
+}
+
+function writeBusUnavailable(res: BusResponse): void {
+	res.statusCode = 503;
+	res.setHeader("content-type", "text/plain");
+	res.end("chowbea bus manifest unavailable — run chowbea-axios extract");
+}
+
+interface CachedBusFile {
+	mtimeMs: number;
+	size: number;
+	snapshot: BusSnapshot;
+}
+
+/**
+ * File-backed mode: re-stats `manifestPath` on every request (one `statSync`
+ * — negligible in prod) and only re-reads + re-parses when mtime or size
+ * changed, so `chowbea-axios extract` writes show up without a server
+ * restart. A read/parse failure (e.g. a partial write mid-`extract`) keeps
+ * serving the last-good snapshot and leaves the cached mtime untouched so
+ * the next request retries; with no last-good snapshot yet, it answers 503.
+ */
+function busHandlerForFile(manifestPath?: string): (req: BusRequest, res: BusResponse) => void {
+	const resolved = path.resolve(manifestPath ?? path.join(process.cwd(), "chowbea.bus.json"));
+	let cached: CachedBusFile | undefined;
+
 	return (req, res) => {
-		const ifNoneMatch = req.headers["if-none-match"];
-		const headerValue = Array.isArray(ifNoneMatch) ? ifNoneMatch.join(", ") : ifNoneMatch;
-		if (headerValue !== undefined && matchesIfNoneMatch(headerValue, etag)) {
-			res.statusCode = 304;
-			res.setHeader("etag", etag);
-			res.end();
+		let stat: Stats | undefined;
+		try {
+			stat = statSync(resolved);
+		} catch {
+			stat = undefined;
+		}
+
+		if (stat && (!cached || cached.mtimeMs !== stat.mtimeMs || cached.size !== stat.size)) {
+			try {
+				const manifest = parseManifest(readFileSync(resolved, "utf8"));
+				cached = { mtimeMs: stat.mtimeMs, size: stat.size, snapshot: snapshotFromManifest(manifest) };
+			} catch {
+				// Partial write mid-extract, or invalid content: keep the last-good
+				// snapshot (if any) and don't touch `cached`, so the stale mtime
+				// forces a retry on the next request instead of wedging on bad data.
+			}
+		}
+
+		if (!cached) {
+			writeBusUnavailable(res);
 			return;
 		}
-		res.statusCode = 200;
-		res.setHeader("content-type", "application/json");
-		res.setHeader("etag", etag);
-		res.end(body);
+		writeBusSnapshot(cached.snapshot, req, res);
 	};
+}
+
+export function busHandler(manifest: BusManifest): (req: BusRequest, res: BusResponse) => void;
+export function busHandler(manifestPath?: string): (req: BusRequest, res: BusResponse) => void;
+export function busHandler(arg?: BusManifest | string): (req: BusRequest, res: BusResponse) => void {
+	if (typeof arg === "object") {
+		const snapshot = snapshotFromManifest(arg);
+		return (req, res) => writeBusSnapshot(snapshot, req, res);
+	}
+	return busHandlerForFile(arg);
 }

@@ -175,9 +175,12 @@ npx chowbea-axios extract   # writes chowbea.bus.json
 ```
 
 ```typescript
-import { busHandler, readBusManifest, DEFAULT_API_ROUTE } from "chowbea-axios/api";
-app.use(DEFAULT_API_ROUTE, busHandler(readBusManifest()));
+import { busHandler, DEFAULT_API_ROUTE } from "chowbea-axios/api";
+// re-reads chowbea.bus.json when it changes — pairs with `extract --watch` in dev, one stat per request in prod
+app.use(DEFAULT_API_ROUTE, busHandler());
 ```
+
+`busHandler()` takes an optional path (defaults to `chowbea.bus.json` in `process.cwd()`), stats it on every request, and only re-reads and re-parses when the mtime or size changed — so a fresh `extract` shows up without a server restart. For a static, pre-loaded manifest (no filesystem access per request), pass a manifest directly: `busHandler(readBusManifest())`.
 
 `chowbea-axios/api` ships both ESM and CommonJS builds, so this works unmodified from ESM and CommonJS (default NestJS) backends alike.
 
