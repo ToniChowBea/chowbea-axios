@@ -8,8 +8,10 @@ import {
 	DEFAULT_CONFIG,
 	DEFAULT_INSTANCE_CONFIG,
 	generateConfigTemplate,
+	getOutputPaths,
 	loadConfig,
 } from "../src/core/config.js";
+import { ConfigValidationError } from "../src/core/errors.js";
 
 describe("DEFAULT_INSTANCE_CONFIG (#28)", () => {
 	it("with_credentials defaults to false (cookies are opt-in)", () => {
@@ -119,5 +121,87 @@ describe("loadConfig (#39 — no auto-create without opt-in)", () => {
 			const re = await loadConfig(configPath);
 			expect(re.wasCreated).toBe(false);
 		});
+	});
+});
+
+describe("[bus] config", () => {
+	async function withTempProject<T>(
+		fn: (root: string, configPath: string) => Promise<T>,
+	): Promise<T> {
+		const root = join(
+			tmpdir(),
+			`chowbea-bus-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+		);
+		await mkdir(root, { recursive: true });
+		await writeFile(
+			join(root, "package.json"),
+			JSON.stringify({ name: "test", version: "0.0.0" }),
+			"utf8",
+		);
+		const configPath = join(root, "api.config.toml");
+		try {
+			return await fn(root, configPath);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	}
+
+	const MINIMAL_CONFIG = `api_endpoint = "https://api.example.com/openapi.json"
+poll_interval_ms = 10000
+
+[output]
+folder = "src/api"
+`;
+
+	it("absent bus section parses as undefined (feature inert)", async () => {
+		await withTempProject(async (_root, configPath) => {
+			await writeFile(configPath, MINIMAL_CONFIG, "utf8");
+			const result = await loadConfig(configPath);
+			expect(result.config.bus).toBeUndefined();
+		});
+	});
+
+	it("valid [bus] endpoint parses", async () => {
+		await withTempProject(async (_root, configPath) => {
+			await writeFile(
+				configPath,
+				`${MINIMAL_CONFIG}
+[bus]
+endpoint = "https://staging.example.com/.well-known/chowbea.json"
+`,
+				"utf8",
+			);
+			const result = await loadConfig(configPath);
+			expect(result.config.bus).toEqual({
+				endpoint: "https://staging.example.com/.well-known/chowbea.json",
+			});
+		});
+	});
+
+	it("[bus] without endpoint throws ConfigValidationError naming bus.endpoint", async () => {
+		await withTempProject(async (_root, configPath) => {
+			await writeFile(
+				configPath,
+				`${MINIMAL_CONFIG}
+[bus]
+`,
+				"utf8",
+			);
+			try {
+				await loadConfig(configPath);
+				expect.unreachable();
+			} catch (err) {
+				expect(err).toBeInstanceOf(ConfigValidationError);
+				expect((err as ConfigValidationError).field).toBe("bus.endpoint");
+			}
+		});
+	});
+
+	it("getOutputPaths exposes busDir under _generated and busCache under _internal", () => {
+		const paths = getOutputPaths(DEFAULT_CONFIG, "/tmp/x");
+		expect(paths.busDir.endsWith(join("_generated", "bus"))).toBe(true);
+		expect(paths.busCache.endsWith(join("_internal", "chowbea.bus.json"))).toBe(
+			true,
+		);
 	});
 });
