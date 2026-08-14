@@ -161,7 +161,7 @@ describe("syncBus", () => {
 			const endpoint = await serve(manifest, (headers) => {
 				capturedAuth = headers["authorization"] as string | undefined;
 			});
-			const authHeader = buildBasicAuthHeader({ username: "alice", password: "s3cret" });
+			const authHeader = buildBasicAuthHeader({ username: "test-user", password: "test-basic-auth-placeholder" });
 
 			await syncBus({
 				endpoint,
@@ -171,7 +171,9 @@ describe("syncBus", () => {
 				logger: SILENT_LOGGER,
 			});
 
-			expect(capturedAuth).toBe(`Basic ${Buffer.from("alice:s3cret").toString("base64")}`);
+			expect(capturedAuth).toBe(
+				`Basic ${Buffer.from("test-user:test-basic-auth-placeholder").toString("base64")}`,
+			);
 		} finally {
 			cleanup();
 		}
@@ -186,6 +188,49 @@ describe("syncBusFromConfig", () => {
 			const result = await syncBusFromConfig(DEFAULT_CONFIG, outputPaths, SILENT_LOGGER);
 			expect(result).toBeNull();
 			expect(existsSync(outputPaths.busCache)).toBe(false);
+		} finally {
+			cleanup();
+		}
+	});
+
+	// Finding E1: when the spec fetch resolved Basic Auth interactively
+	// (env vars unset, a human was prompted), the bus endpoint must reuse
+	// those already-resolved credentials rather than re-resolving
+	// non-interactively — which fails outright with no env vars set, since a
+	// bus sync has no TTY to prompt on.
+	it("resolvedAuth sends the expected Authorization header without any [fetch.auth] env vars set", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			let capturedAuth: string | undefined;
+			const endpoint = await serve(manifest, (headers) => {
+				capturedAuth = headers["authorization"] as string | undefined;
+			});
+			// [fetch.auth] IS configured (so a non-interactive re-resolution
+			// would be attempted without the override), but its env vars are
+			// deliberately left unset — resolvedAuth must be used instead.
+			const config = {
+				...DEFAULT_CONFIG,
+				bus: { endpoint },
+				fetch: {
+					auth: {
+						type: "basic" as const,
+						username: "${CHOWBEA_TEST_UNSET_USER}",
+						password: "${CHOWBEA_TEST_UNSET_PASS}",
+					},
+				},
+			};
+			const outputPaths = getOutputPaths(config, dir);
+
+			const result = await syncBusFromConfig(config, outputPaths, SILENT_LOGGER, {
+				username: "test-user",
+				password: "test-basic-auth-placeholder",
+			});
+
+			expect(result).toMatchObject({ fetched: true, typeCount: 1 });
+			expect(capturedAuth).toBe(
+				`Basic ${Buffer.from("test-user:test-basic-auth-placeholder").toString("base64")}`,
+			);
 		} finally {
 			cleanup();
 		}

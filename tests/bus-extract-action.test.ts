@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { executeExtract } from "../src/core/actions/extract.js";
 import { parseManifest } from "../src/core/bus/manifest.js";
@@ -48,6 +49,55 @@ describe("executeExtract", () => {
 			const result = await executeExtract({ cwd: dir, check: true }, SILENT_LOGGER);
 			expect(result.ok).toBe(true);
 			expect(existsSync(join(dir, "chowbea.bus.json"))).toBe(false);
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("executeExtract: --out nested path (finding C2)", () => {
+	it("creates missing parent directories before writing the artifact", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type Grade = "A";\n`,
+		});
+		try {
+			const result = await executeExtract({ cwd: dir, out: "nested/dir/chowbea.bus.json" }, SILENT_LOGGER);
+			expect(result.ok).toBe(true);
+			const expected = join(dir, "nested", "dir", "chowbea.bus.json");
+			expect(result.wrote).toBe(expected);
+			expect(existsSync(expected)).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("executeExtract: --diff HTTP baseline (finding C1)", () => {
+	let server: Server | null = null;
+	afterEach(() => {
+		server?.close();
+		server = null;
+	});
+
+	it("a non-ok HTTP baseline response rejects with the status, not a JSON-parse error", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const endpoint = await new Promise<string>((resolve) => {
+				server = createServer((_req, res) => {
+					res.statusCode = 404;
+					res.end("not found");
+				});
+				server.listen(0, "127.0.0.1", () => {
+					const addr = server!.address() as { port: number };
+					resolve(`http://127.0.0.1:${addr.port}/chowbea.bus.json`);
+				});
+			});
+
+			await expect(
+				executeExtract({ cwd: dir, diffBaseline: endpoint, check: true }, SILENT_LOGGER),
+			).rejects.toThrow(/404/);
 		} finally {
 			cleanup();
 		}

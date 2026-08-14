@@ -7,6 +7,13 @@ import { buildBasicAuthHeader, interpolateHeaders, resolveBasicAuthNonInteractiv
 import { writeBusFiles } from "./emit.js";
 import { diffManifests, parseManifest, type BusDiff, type BusManifest } from "./manifest.js";
 
+/**
+ * Shared HTTP timeout for bus manifest fetches (syncBus's own fetch, and
+ * `extract --diff <url>`'s baseline fetch) — CI must never hang indefinitely
+ * on a dead/unreachable bus endpoint.
+ */
+export const BUS_FETCH_TIMEOUT_MS = 30_000;
+
 export interface BusSyncResult {
 	/** false when the endpoint returned 304, or the fetched manifest hash is unchanged. */
 	fetched: boolean;
@@ -43,7 +50,10 @@ export async function syncBus(options: {
 	const headers: Record<string, string> = { ...options.headers };
 	if (cached) headers["if-none-match"] = `"${cached.hash}"`;
 
-	const response = await fetch(options.endpoint, { headers });
+	const response = await fetch(options.endpoint, {
+		headers,
+		signal: AbortSignal.timeout(BUS_FETCH_TIMEOUT_MS),
+	});
 	if (response.status === 304) {
 		return { fetched: false, typeCount: 0, diff: null, written: [] };
 	}
@@ -83,19 +93,29 @@ export async function syncBus(options: {
  * spec fetching: Basic Auth is resolved non-interactively (never prompts —
  * a bus sync must never block on a TTY) and wins over any explicit
  * Authorization header, matching `fetchOpenApiSpec`'s own precedence.
+ *
+ * `resolvedAuth`, when provided, is used INSTEAD of resolving
+ * `[fetch.auth]` non-interactively. This lets a caller that already
+ * resolved Basic Auth interactively for the spec request (env vars unset,
+ * prompted a human) reuse those credentials here rather than re-resolving
+ * non-interactively — which would fail outright, since a bus sync has no
+ * TTY to prompt on.
  */
 export async function syncBusFromConfig(
 	config: ApiConfig,
 	outputPaths: OutputPaths,
 	logger: Logger,
+	resolvedAuth?: { username: string; password: string },
 ): Promise<BusSyncResult | null> {
 	if (!config.bus) return null;
 
 	const headers: Record<string, string> = config.fetch?.headers
 		? interpolateHeaders(config.fetch.headers)
 		: {};
-	if (config.fetch?.auth?.type === "basic") {
-		const auth = resolveBasicAuthNonInteractive(config.fetch.auth);
+	const auth =
+		resolvedAuth ??
+		(config.fetch?.auth?.type === "basic" ? resolveBasicAuthNonInteractive(config.fetch.auth) : undefined);
+	if (auth) {
 		for (const key of Object.keys(headers)) {
 			if (key.toLowerCase() === "authorization") delete headers[key];
 		}

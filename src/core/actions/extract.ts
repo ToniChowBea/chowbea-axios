@@ -4,11 +4,12 @@
  * validate it as a CI gate without touching the filesystem.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "../../adapters/logger-interface.js";
 import { extractBusManifest, type ExtractError } from "../bus/extract.js";
+import { BUS_FETCH_TIMEOUT_MS } from "../bus/fetch.js";
 import { diffManifests, parseManifest, type BusDiff } from "../bus/manifest.js";
 
 export interface ExtractActionOptions {
@@ -60,9 +61,20 @@ export async function executeExtract(
 
 		let diff: BusDiff | null = null;
 		if (options.diffBaseline) {
-			const baselineJson = /^https?:\/\//.test(options.diffBaseline)
-				? await (await fetch(options.diffBaseline)).text()
-				: await readFile(path.resolve(cwd, options.diffBaseline), "utf8");
+			let baselineJson: string;
+			if (/^https?:\/\//.test(options.diffBaseline)) {
+				const response = await fetch(options.diffBaseline, {
+					signal: AbortSignal.timeout(BUS_FETCH_TIMEOUT_MS),
+				});
+				if (!response.ok) {
+					throw new Error(
+						`Failed to fetch baseline manifest from ${options.diffBaseline}: ${response.status} ${response.statusText}`,
+					);
+				}
+				baselineJson = await response.text();
+			} else {
+				baselineJson = await readFile(path.resolve(cwd, options.diffBaseline), "utf8");
+			}
 			const baseline = parseManifest(baselineJson);
 			diff = diffManifests(baseline, manifest!);
 			for (const name of diff.added) logger.info(`bus: + ${name}`);
@@ -82,6 +94,7 @@ export async function executeExtract(
 		}
 
 		const outPath = path.resolve(cwd, options.out ?? "chowbea.bus.json");
+		await mkdir(path.dirname(outPath), { recursive: true });
 		await writeFile(outPath, `${JSON.stringify(manifest, null, "\t")}\n`, "utf8");
 		logger.done(`Wrote ${typeCount} type(s) to ${outPath}`);
 		return { ok: true, errors: [], typeCount, wrote: outPath, diff };

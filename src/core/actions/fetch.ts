@@ -157,10 +157,11 @@ async function syncBusResilient(
 	config: ApiConfig,
 	outputPaths: OutputPaths,
 	logger: Logger,
+	resolvedAuth?: { username: string; password: string },
 ): Promise<void> {
 	try {
 		const { syncBusFromConfig } = await import("../bus/fetch.js");
-		await syncBusFromConfig(config, outputPaths, logger);
+		await syncBusFromConfig(config, outputPaths, logger, resolvedAuth);
 	} catch (error) {
 		logger.warn(
 			{ error: error instanceof Error ? error.message : String(error) },
@@ -220,6 +221,11 @@ export async function executeFetch(
 
 	let fetchResult;
 	let sourceIdentifier: string;
+	// Threaded to the bus sync below: when the spec fetch resolved Basic Auth
+	// interactively (env vars unset, prompted a human), the bus endpoint must
+	// reuse those same credentials instead of re-resolving non-interactively,
+	// which would fail outright (a bus sync has no TTY to prompt on).
+	let resolvedAuth: { username: string; password: string } | undefined;
 
 	if (specSource.type === "local") {
 		// Load from local file
@@ -240,12 +246,11 @@ export async function executeFetch(
 		// Resolve auth credentials if configured.
 		// Caller-supplied options.auth (e.g., from TUI) takes precedence
 		// over config-based env var lookup and interactive prompts.
-		let auth: { username: string; password: string } | undefined;
 		if (options.auth) {
-			auth = options.auth;
+			resolvedAuth = options.auth;
 			logger.debug("Using Basic Auth credentials from caller");
 		} else if (config.fetch?.auth?.type === "basic") {
-			auth = await resolveBasicAuth(config.fetch.auth, logger, prompts);
+			resolvedAuth = await resolveBasicAuth(config.fetch.auth, logger, prompts);
 		}
 
 		fetchResult = await fetchOpenApiSpec({
@@ -255,7 +260,7 @@ export async function executeFetch(
 			logger,
 			force: options.force,
 			headers: config.fetch?.headers,
-			auth,
+			auth: resolvedAuth,
 		});
 
 		// Handle network fallback
@@ -273,7 +278,7 @@ export async function executeFetch(
 		// nothing changed (If-None-Match + hash compare). Skipped in dry-run:
 		// dry-run never writes files, and bus sync writes bus files.
 		if (!options.dryRun) {
-			await syncBusResilient(config, outputPaths, logger);
+			await syncBusResilient(config, outputPaths, logger, resolvedAuth);
 		}
 
 		return {
@@ -380,7 +385,7 @@ export async function executeFetch(
 	// configured. Shared with watch's runCycle so both entry points stay in
 	// lockstep. A bus-endpoint failure here only warns — it must not
 	// discard the types/operations that were just generated successfully.
-	await syncBusResilient(config, outputPaths, logger);
+	await syncBusResilient(config, outputPaths, logger, resolvedAuth);
 
 	return {
 		specChanged: true,
