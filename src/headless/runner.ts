@@ -212,6 +212,8 @@ function printCommandHelp(command: CommandName): void {
     -p, --project <path>   Path to tsconfig.json (default: auto-discovered)
     -o, --out <path>       Output path for the manifest (default: chowbea.bus.json)
         --check            Validate only — never write the manifest
+        --diff <path|url>  Diff against a baseline manifest (file path or http(s) URL)
+        --fail-on-removed  Fail if the diff against --diff removed any types
     -q, --quiet            Suppress non-error output
     -v, --verbose          Show detailed output
 `,
@@ -770,6 +772,8 @@ async function handleExtract(args: string[]): Promise<void> {
 			project: { type: "string", short: "p" },
 			out: { type: "string", short: "o" },
 			check: { type: "boolean", default: false },
+			diff: { type: "string" },
+			"fail-on-removed": { type: "boolean", default: false },
 			quiet: { type: "boolean", short: "q", default: false },
 			verbose: { type: "boolean", short: "v", default: false },
 		},
@@ -786,6 +790,8 @@ async function handleExtract(args: string[]): Promise<void> {
 		project: values.project,
 		out: values.out,
 		check: values.check ?? false,
+		diffBaseline: values.diff,
+		failOnRemoved: values["fail-on-removed"] ?? false,
 	};
 
 	try {

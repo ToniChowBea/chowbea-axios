@@ -53,3 +53,43 @@ describe("executeExtract", () => {
 		}
 	});
 });
+
+describe("executeExtract --diff", () => {
+	it("diffs against a baseline file and reports removals", async () => {
+		const base = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\nexport type B = 2;\n`,
+		});
+		const next = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 111;\nexport type C = 3;\n`,
+		});
+		try {
+			const baseResult = await executeExtract({ cwd: base.dir }, SILENT_LOGGER);
+			const result = await executeExtract(
+				{ cwd: next.dir, diffBaseline: baseResult.wrote!, check: true },
+				SILENT_LOGGER,
+			);
+			expect(result.ok).toBe(true); // removals are report-only without the flag
+			expect(result.diff).toEqual({ added: ["C"], removed: ["B"], changed: ["A"] });
+		} finally {
+			base.cleanup();
+			next.cleanup();
+		}
+	});
+
+	it("--fail-on-removed turns removals into failure", async () => {
+		const base = makeBusFixture({ "src/bus.chowbea.ts": `export type A = 1;\n` });
+		const next = makeBusFixture({ "src/bus.chowbea.ts": `export type Z = 1;\n` });
+		try {
+			const baseResult = await executeExtract({ cwd: base.dir }, SILENT_LOGGER);
+			const result = await executeExtract(
+				{ cwd: next.dir, diffBaseline: baseResult.wrote!, check: true, failOnRemoved: true },
+				SILENT_LOGGER,
+			);
+			expect(result.ok).toBe(false);
+			expect(result.diff?.removed).toEqual(["A"]);
+		} finally {
+			base.cleanup();
+			next.cleanup();
+		}
+	});
+});
