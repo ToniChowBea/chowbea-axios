@@ -56,7 +56,9 @@ Rules (all violations are extraction-time errors, batch-reported with
   reference to a non-bus project type errors:
   `GradeMap references Grade (src/exams/models.ts:12) — add it to a
   .chowbea.ts barrel or mark it @chowbea-export.` References to types imported
-  from `node_modules` are errors in v1.
+  from `node_modules` are errors in v1. Qualifier-less `typeof import("...")`
+  module-namespace types are not yet validated (v1 limitation, tracked for
+  follow-up).
 - **Types only (v1):** type aliases, interfaces, and enums are allowed. Enums
   are carried as declarations (they are values too, and the frontend emission
   reproduces them verbatim). Classes, `const`s, functions, and Zod schemas on
@@ -135,7 +137,7 @@ New package export (`./api` in the export map). Deliberately tiny,
 framework-agnostic, no Nest module/DI in v1:
 
 - `readBusManifest(path?)` — loads the artifact (default: `chowbea.bus.json`
-  next to the caller's `package.json`).
+  resolved from `process.cwd()`).
 - `busHandler(manifest)` — `(req, res)` handler serving the manifest as JSON
   with the manifest hash as `ETag` (supports `If-None-Match` → 304). Mounts in
   Express/Nest with one line:
@@ -160,8 +162,11 @@ endpoint = "https://staging.example.com/.well-known/chowbea.json"
 
 **Fetch:** `fetch` pulls the manifest alongside the spec, caches it under
 `_internal/` (mirroring the OpenAPI cache), and skips regeneration when the
-top-level hash is unchanged. `diff` learns bus awareness: added / changed /
-removed types by name and hash.
+top-level hash is unchanged. Diff reporting (added / changed / removed types
+by name and hash) is shipped as part of this sync — logged on every
+`fetch`/`watch` cycle that changes the bus — and via `extract --diff` on the
+backend side (§2/§6); a standalone `diff` command with bus awareness is
+deferred.
 
 **Emission:** mirrors backend barrels — one generated file per barrel key with
 `/` flattened to `.` (`exams/grade` → `_generated/bus/exams.grade.ts`), marker
@@ -191,9 +196,9 @@ unit. This deliberately avoids the single-file shape that produced an
 
 - The scaffolded `chowbea-axios-ci.yml` template gains a bus step alongside
   the existing spec staleness check: fetch manifest from staging, regenerate,
-  fail if committed `_generated/bus/**` is stale. Bus URL defaults to
-  same-origin `/.well-known/chowbea.json` derived from the existing staging
-  endpoint var, so most teams add zero new configuration.
+  fail if committed `_generated/bus/**` is stale. The bus endpoint is not
+  derived from the existing staging endpoint var — CI teams configure
+  `[bus].endpoint` explicitly, same as any other environment-specific value.
 
 **Merge conflicts:** bus output lives under `_generated/`, so the existing
 `resolve` command auto-regenerates conflicted bus files with no changes
