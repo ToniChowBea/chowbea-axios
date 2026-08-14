@@ -175,9 +175,11 @@ npx chowbea-axios extract   # writes chowbea.bus.json
 ```
 
 ```typescript
-import { readBusManifest, busHandler } from "chowbea-axios/api";
-app.use("/.well-known/chowbea.json", busHandler(readBusManifest()));
+import { busHandler, readBusManifest, DEFAULT_API_ROUTE } from "chowbea-axios/api";
+app.use(DEFAULT_API_ROUTE, busHandler(readBusManifest()));
 ```
+
+`chowbea-axios/api` ships both ESM and CommonJS builds, so this works unmodified from ESM and CommonJS (default NestJS) backends alike.
 
 **Consume (frontend repo)** — add to `api.config.toml`:
 
