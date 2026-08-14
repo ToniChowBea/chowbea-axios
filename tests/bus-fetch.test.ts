@@ -79,6 +79,33 @@ describe("syncBus", () => {
 		}
 	});
 
+	it("a cached manifest that fails the (new) structural validation is treated as no cache — first sync, not a crash", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const endpoint = await serve(manifest);
+			const busCachePath = join(dir, "_internal", "chowbea.bus.json");
+			const busDir = join(dir, "_generated", "bus");
+
+			// Simulate a cache written before parseManifest gained structural
+			// validation (finding B3) — e.g. a hand-edited or corrupted file with
+			// an unsafe barrel key. loadCached's broad catch must still swallow
+			// this and fall back to "no cache" instead of throwing.
+			mkdirSync(join(dir, "_internal"), { recursive: true });
+			writeFileSync(
+				busCachePath,
+				JSON.stringify({ ...manifest, barrels: { "..\\evil": manifest.barrels.core } }),
+				"utf8",
+			);
+
+			const result = await syncBus({ endpoint, busCachePath, busDir, logger: SILENT_LOGGER });
+			expect(result).toMatchObject({ fetched: true, typeCount: 1, diff: null });
+			expect(readFileSync(join(busDir, "core.ts"), "utf8")).toContain("export type A = 1;");
+		} finally {
+			cleanup();
+		}
+	});
+
 	it("unknown manifest version fails loud with the upgrade message", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {

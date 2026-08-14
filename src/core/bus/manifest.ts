@@ -55,6 +55,50 @@ export function buildManifest(barrels: BusManifest["barrels"], now: Date): BusMa
 	};
 }
 
+const VALID_KINDS = new Set<BusTypeKind>(["type", "interface", "enum"]);
+
+/**
+ * Rejects barrel keys that could escape `busDir` when joined into a path
+ * (`path.join(busDir, name)` in emit.ts — a `\` or `..` segment traverses
+ * out of it, notably on Windows where `\` is a separator) or that are
+ * otherwise unusable as a relative path segment.
+ */
+function isSafeBarrelKey(key: string): boolean {
+	if (key.length === 0 || key.includes("\\")) return false;
+	const segments = key.split("/");
+	return segments.every((seg) => seg !== "" && seg !== "." && seg !== "..");
+}
+
+/** A network-fetched manifest is untrusted input — validate every entry field before it's trusted. */
+function assertValidEntry(entry: unknown, key: string, index: number): asserts entry is BusTypeEntry {
+	const label = `barrels["${key}"][${index}]`;
+	if (typeof entry !== "object" || entry === null) {
+		throw new Error(`Malformed chowbea bus manifest: ${label} is not an object`);
+	}
+	const e = entry as Record<string, unknown>;
+	for (const field of ["name", "declaration", "source", "hash"] as const) {
+		if (typeof e[field] !== "string") {
+			throw new Error(`Malformed chowbea bus manifest: ${label}.${field} must be a string`);
+		}
+	}
+	if (typeof e.kind !== "string" || !VALID_KINDS.has(e.kind as BusTypeKind)) {
+		throw new Error(`Malformed chowbea bus manifest: ${label}.kind must be one of "type" | "interface" | "enum"`);
+	}
+	if (typeof e.line !== "number") {
+		throw new Error(`Malformed chowbea bus manifest: ${label}.line must be a number`);
+	}
+}
+
+/**
+ * Parses a manifest and validates it structurally — this is the trust
+ * boundary every network-fetched manifest passes through (a hostile or
+ * compromised bus endpoint is untrusted input). Beyond the envelope
+ * (version/hash/barrels), each barrel key must be a safe relative path
+ * segment (emit.ts does `path.join(busDir, name)` — an unchecked key
+ * could traverse out of `busDir`) and each entry's fields must have the
+ * expected types (a non-string `declaration`, for example, would
+ * otherwise emit a literal `undefined` into generated code).
+ */
 export function parseManifest(json: string): BusManifest {
 	const raw = JSON.parse(json) as Partial<BusManifest>;
 	if (typeof raw !== "object" || raw === null || typeof raw.chowbeaBus !== "string") {
@@ -65,6 +109,15 @@ export function parseManifest(json: string): BusManifest {
 	}
 	if (typeof raw.hash !== "string" || typeof raw.barrels !== "object" || raw.barrels === null) {
 		throw new Error("Malformed chowbea bus manifest: missing hash or barrels");
+	}
+	for (const [key, entries] of Object.entries(raw.barrels)) {
+		if (!isSafeBarrelKey(key)) {
+			throw new Error(`Malformed chowbea bus manifest: unsafe barrel key "${key}"`);
+		}
+		if (!Array.isArray(entries)) {
+			throw new Error(`Malformed chowbea bus manifest: barrels["${key}"] is not an array`);
+		}
+		entries.forEach((entry, i) => assertValidEntry(entry, key, i));
 	}
 	return raw as BusManifest;
 }

@@ -47,6 +47,63 @@ describe("bus manifest", () => {
 		expect(() => parseManifest("not json")).toThrow();
 	});
 
+	// Finding B3: a manifest arrives over the network from the configured bus
+	// endpoint — a hostile/compromised endpoint is untrusted input. parseManifest
+	// is the trust boundary every fetched manifest passes through.
+	describe("parseManifest: structural validation of untrusted input", () => {
+		it("rejects a barrel key that could path-traverse out of busDir", () => {
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const evil = JSON.stringify({ ...m, barrels: { "..\\evil": m.barrels.one } });
+			expect(() => parseManifest(evil)).toThrow(/unsafe barrel key/i);
+			expect(() => parseManifest(evil)).toThrow(/\.\.\\evil/);
+		});
+
+		it("rejects a barrel key with a `..` path segment", () => {
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const evil = JSON.stringify({ ...m, barrels: { "foo/../../evil": m.barrels.one } });
+			expect(() => parseManifest(evil)).toThrow(/unsafe barrel key/i);
+		});
+
+		it("rejects an entry with a non-string declaration instead of silently emitting `undefined`", () => {
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const bad = JSON.stringify({
+				...m,
+				barrels: { one: [{ ...m.barrels.one[0], declaration: 12345 }] },
+			});
+			expect(() => parseManifest(bad)).toThrow(/declaration/);
+			expect(() => parseManifest(bad)).toThrow(/must be a string/);
+		});
+
+		it("rejects an entry with an invalid kind", () => {
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const bad = JSON.stringify({
+				...m,
+				barrels: { one: [{ ...m.barrels.one[0], kind: "class" }] },
+			});
+			expect(() => parseManifest(bad)).toThrow(/kind/);
+		});
+
+		it("rejects an entry with a non-number line", () => {
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const bad = JSON.stringify({
+				...m,
+				barrels: { one: [{ ...m.barrels.one[0], line: "1" }] },
+			});
+			expect(() => parseManifest(bad)).toThrow(/line/);
+		});
+
+		it("still accepts a well-formed manifest with nested barrel keys and multiple entries", () => {
+			const m = buildManifest(
+				{
+					"exams/grade": [entry("Grade", "export type Grade = 1;"), entry("Id", "export type Id = string;")],
+					_marked: [{ ...entry("Plan", "export interface Plan {}"), kind: "interface" as const }],
+				},
+				new Date(0),
+			);
+			expect(parseManifest(JSON.stringify(m))).toEqual(m);
+		});
+	});
+
 	it("diffManifests reports added/removed/changed by type name", () => {
 		const base = buildManifest(
 			{ one: [entry("A", "export type A = 1;"), entry("B", "export type B = 2;")] },
