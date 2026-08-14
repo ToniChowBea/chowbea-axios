@@ -206,15 +206,26 @@ export async function executeGenerate(
 	}
 
 	if (config.bus) {
+		const { readFile } = await import("node:fs/promises");
+		const { parseManifest } = await import("../bus/manifest.js");
+		const { writeBusFiles } = await import("../bus/emit.js");
+
+		// Only an absent cache file is the expected "never ran fetch" case —
+		// swallow that one as a warning. A cache file that exists but fails to
+		// parse/validate, or an emission failure (e.g. filename collision),
+		// is a real problem and must fail generate loudly, same as any other
+		// failure in this action (e.g. SpecNotFoundError above).
+		let cached: string | null = null;
 		try {
-			const { readFile } = await import("node:fs/promises");
-			const { parseManifest } = await import("../bus/manifest.js");
-			const { writeBusFiles } = await import("../bus/emit.js");
-			const manifest = parseManifest(await readFile(outputPaths.busCache, "utf8"));
+			cached = await readFile(outputPaths.busCache, "utf8");
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+			logger.warn("Type bus configured but no cached manifest — run fetch first");
+		}
+		if (cached !== null) {
+			const manifest = parseManifest(cached);
 			await writeBusFiles(manifest, outputPaths.busDir);
 			logger.info("Type bus: regenerated from cache");
-		} catch {
-			logger.warn("Type bus configured but no cached manifest — run fetch first");
 		}
 	}
 
