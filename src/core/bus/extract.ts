@@ -198,6 +198,20 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		}
 	}
 
+	// ~ Reserved barrel key: "index" is reserved for the generated re-export index.
+	for (const [key, items] of collected) {
+		if (key === "index" && items.some((i) => i.registeredAt.file.endsWith(BARREL_SUFFIX))) {
+			const first = items[0];
+			errors.push({
+				message:
+					`Barrel key "index" is reserved for the generated re-export index — ` +
+					`rename the barrel file.`,
+				file: first.registeredAt.file,
+				line: first.registeredAt.line,
+			});
+		}
+	}
+
 	// ~ Reserved prefix: a real barrel may not produce a _marked/* key.
 	for (const [key, items] of collected) {
 		if (key.startsWith(RESERVED_PREFIX) && items.some((i) => i.registeredAt.file.endsWith(BARREL_SUFFIX))) {

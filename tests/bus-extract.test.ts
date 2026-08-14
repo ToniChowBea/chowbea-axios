@@ -160,6 +160,20 @@ describe("extractBusTypes: validation", () => {
 		}
 	});
 
+	it('barrel key "index" is reserved for the generated re-export index', () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/index.chowbea.ts": `export type Special = string;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain("index");
+			expect(out.errors[0].message).toContain("reserved");
+		} finally {
+			cleanup();
+		}
+	});
+
 	it("class on the bus is a types-only error (already covered by sweep) — const via barrel too", () => {
 		const { dir, cleanup } = makeBusFixture({
 			"src/bus.chowbea.ts": `export const LIMIT = 10;\nexport class Svc {}\n`,

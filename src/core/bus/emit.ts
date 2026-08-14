@@ -22,9 +22,24 @@ function renderBarrelFile(barrelKey: string, entries: BusTypeEntry[]): string {
 
 export function renderBusFiles(manifest: BusManifest): Record<string, string> {
 	const files: Record<string, string> = {};
+	const keysByFilename: Record<string, string> = {};
 	const keys = Object.keys(manifest.barrels).sort();
 	for (const key of keys) {
-		files[`${moduleName(key)}.ts`] = renderBarrelFile(key, manifest.barrels[key]);
+		const filename = `${moduleName(key)}.ts`;
+		if (filename === "index.ts") {
+			throw new Error(
+				`Bus emission filename collision: "index.ts" reserved for the generated re-export index, ` +
+					`but barrel key "index" would produce it. Rename the barrel.`,
+			);
+		}
+		if (keysByFilename[filename]) {
+			throw new Error(
+				`Bus emission filename collision: "${filename}" produced by both "${keysByFilename[filename]}" and "${key}". ` +
+					`Barrel keys must flatten distinctly.`,
+			);
+		}
+		keysByFilename[filename] = key;
+		files[filename] = renderBarrelFile(key, manifest.barrels[key]);
 	}
 	const reexports = keys.map((k) => `export * from "./${moduleName(k)}";`);
 	files["index.ts"] = `${HEADER}\n${reexports.join("\n")}\n`;
