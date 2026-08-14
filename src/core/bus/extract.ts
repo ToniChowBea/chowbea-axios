@@ -198,6 +198,93 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		}
 	}
 
+	// ~ Reserved prefix: a real barrel may not produce a _marked/* key.
+	for (const [key, items] of collected) {
+		if (key.startsWith(RESERVED_PREFIX) && items.some((i) => i.registeredAt.file.endsWith(BARREL_SUFFIX))) {
+			const first = items[0];
+			errors.push({
+				message:
+					`Barrel key "${key}" collides with the reserved _marked/ namespace — ` +
+					`move the barrel out of a _marked/ directory (reserved for @chowbea-export grouping).`,
+				file: first.registeredAt.file,
+				line: first.registeredAt.line,
+			});
+		}
+	}
+
+	// ~ Duplicates: the same exported name registered via any two sites. The
+	// same original declaration re-exported from two barrels is still a
+	// duplicate — one bus name must have exactly one registration site.
+	const byName = new Map<string, Collected[]>();
+	for (const items of collected.values()) {
+		for (const item of items) {
+			const list = byName.get(item.entry.name) ?? [];
+			list.push(item);
+			byName.set(item.entry.name, list);
+		}
+	}
+	for (const [name, sites] of byName) {
+		if (sites.length > 1) {
+			const where = sites.map((s) => `${s.registeredAt.file}:${s.registeredAt.line}`).join(" and ");
+			errors.push({
+				message: `"${name}" is registered twice on the bus — at ${where}. Remove one.`,
+				file: sites[0].registeredAt.file,
+				line: sites[0].registeredAt.line,
+			});
+		}
+	}
+
+	// ~ Closed world: every type reference inside a bus declaration must
+	// resolve to another bus declaration, a type parameter, or the TS lib.
+	// Dedup per (referencer, referenced) pair — a name repeated inside one
+	// declaration (or across declarations) only errors once.
+	const busDeclarations = new Set<ts.Declaration>([...collected.values()].flat().map((i) => i.node));
+	const seenRefs = new Set<string>();
+	for (const items of collected.values()) {
+		for (const item of items) {
+			const visit = (node: ts.Node): void => {
+				if (ts.isTypeReferenceNode(node) || ts.isExpressionWithTypeArguments(node)) {
+					const nameNode = ts.isTypeReferenceNode(node) ? node.typeName : node.expression;
+					const symbol = checker.getSymbolAtLocation(nameNode);
+					const resolved =
+						symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+					const target = resolved?.declarations?.[0];
+					if (resolved && target && !(resolved.flags & ts.SymbolFlags.TypeParameter)) {
+						const targetFile = target.getSourceFile();
+						const isLib = program.isSourceFileDefaultLibrary(targetFile);
+						const isNodeModules = targetFile.fileName.includes("/node_modules/");
+						if (!isLib && (isNodeModules || !busDeclarations.has(target))) {
+							const dedupKey = `${item.entry.name}->${resolved.name}`;
+							if (!seenRefs.has(dedupKey)) {
+								seenRefs.add(dedupKey);
+								errors.push(
+									isNodeModules
+										? {
+												message:
+													`"${item.entry.name}" references "${resolved.name}" from node_modules — ` +
+													`external types cannot ride the bus in v1.`,
+												file: item.entry.source,
+												line: item.entry.line,
+											}
+										: {
+												message:
+													`"${item.entry.name}" references "${resolved.name}" ` +
+													`(${toPosix(path.relative(options.projectRoot, targetFile.fileName))}:${lineOf(target)}) ` +
+													`which is not on the bus — add it to a .chowbea.ts barrel or mark it @chowbea-export.`,
+												file: item.entry.source,
+												line: item.entry.line,
+											},
+								);
+							}
+						}
+					}
+				}
+				ts.forEachChild(node, visit);
+			};
+			visit(item.node);
+		}
+	}
+
 	const barrels: Record<string, BusTypeEntry[]> = {};
 	for (const [key, items] of [...collected.entries()].sort(([a], [b]) => a.localeCompare(b))) {
 		barrels[key] = items.map((i) => i.entry).sort((a, b) => a.name.localeCompare(b.name));

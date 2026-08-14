@@ -81,3 +81,107 @@ describe("extractBusTypes: sweep", () => {
 		}
 	});
 });
+
+describe("extractBusTypes: validation", () => {
+	it("duplicate registration errors name both sites", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/models.ts": `/** @chowbea-export */\nexport type Grade = "A";\n`,
+			"src/bus.chowbea.ts": `export type { Grade } from "./models.js";\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain('"Grade" is registered twice');
+			expect(out.errors[0].message).toContain("src/models.ts");
+			expect(out.errors[0].message).toContain("src/bus.chowbea.ts");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("closed world: referencing a non-bus project type errors with a fix instruction", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/models.ts": `export type Grade = "A" | "B";\n`,
+			"src/bus.chowbea.ts": `import type { Grade } from "./models.js";\nexport type GradeMap = Map<string, Grade>;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain('"GradeMap" references "Grade"');
+			expect(out.errors[0].message).toContain("src/models.ts");
+			expect(out.errors[0].message).toContain(".chowbea.ts barrel or mark it @chowbea-export");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("closed world: TS lib built-ins, primitives, generics, and bus-to-bus refs are fine", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": [
+				`export type Id = string;`,
+				`export interface Box<T> { value: T; at: Date }`,
+				`export type Lookup = Map<Id, Partial<Box<number>>>;`,
+				"export type Tpl = `id-${string}`;",
+			].join("\n"),
+		});
+		try {
+			expect(extractBusTypes({ projectRoot: dir }).errors).toEqual([]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("closed world: node_modules type references error in v1", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"node_modules/somepkg/index.d.ts": `export type External = { x: number };\n`,
+			"node_modules/somepkg/package.json": `{ "name": "somepkg", "types": "index.d.ts" }`,
+			"src/bus.chowbea.ts": `import type { External } from "somepkg";\nexport type Wrapped = { inner: External };\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain("node_modules");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("a barrel under a _marked/ directory is rejected (reserved prefix)", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/_marked/x.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain("_marked");
+			expect(out.errors[0].message).toContain("reserved");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("class on the bus is a types-only error (already covered by sweep) — const via barrel too", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export const LIMIT = 10;\nexport class Svc {}\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(2);
+			for (const err of out.errors) expect(err.message).toContain("only types ride the bus");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("reports ALL violations in one pass, not fail-on-first", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/a.ts": `export type Hidden = 1;\n`,
+			"src/bus.chowbea.ts": `import type { Hidden } from "./a.js";\nexport type UsesHidden = { h: Hidden };\nexport const nope = 1;\n`,
+		});
+		try {
+			expect(extractBusTypes({ projectRoot: dir }).errors).toHaveLength(2);
+		} finally {
+			cleanup();
+		}
+	});
+});
