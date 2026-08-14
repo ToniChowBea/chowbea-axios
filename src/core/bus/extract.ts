@@ -1,7 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 
-import { hashText, type BusTypeEntry, type BusTypeKind } from "./manifest.js";
+import { buildManifest, hashText, type BusManifest, type BusTypeEntry, type BusTypeKind } from "./manifest.js";
 
 export interface ExtractError {
 	message: string;
@@ -293,4 +293,14 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		barrels[key] = items.map((i) => i.entry).sort((a, b) => a.name.localeCompare(b.name));
 	}
 	return { barrels, errors };
+}
+
+export function extractBusManifest(options: {
+	projectRoot: string;
+	tsconfigPath?: string;
+	now?: Date;
+}): { manifest: BusManifest | null; errors: ExtractError[] } {
+	const { barrels, errors } = extractBusTypes(options);
+	if (errors.length > 0) return { manifest: null, errors };
+	return { manifest: buildManifest(barrels, options.now ?? new Date()), errors };
 }

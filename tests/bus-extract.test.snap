@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`extractBusManifest: fidelity + assembly > manifest snapshot: stable shape and version 1`] = `
+{
+  "barrels": {
+    "_marked/billing": [
+      {
+        "declaration": "export interface Plan { name: string }",
+        "hash": "34d6d4d51d0447c68005c0d8d9043e8b4ea9935b037a0471702188c190b4c2ee",
+        "kind": "interface",
+        "line": 2,
+        "name": "Plan",
+        "source": "src/billing/plans.ts",
+      },
+    ],
+    "exams/grade": [
+      {
+        "declaration": "export type Grade = "A" | "B";",
+        "hash": "25a1399b5ed9b8980694492effe95604ca32bea52e308c9b8b611a2023d51733",
+        "kind": "type",
+        "line": 1,
+        "name": "Grade",
+        "source": "src/exams/grade.chowbea.ts",
+      },
+    ],
+  },
+  "chowbeaBus": "1",
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "hash": "dbced89dcba6b713433db31704f7c463b8123e2a16a5418bcd5ca56f832768ab",
+}
+`;

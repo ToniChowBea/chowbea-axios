@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { extractBusTypes } from "../src/core/bus/extract.js";
+import { extractBusManifest, extractBusTypes } from "../src/core/bus/extract.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 
 describe("extractBusTypes: sweep", () => {
@@ -201,6 +201,57 @@ describe("extractBusTypes: validation", () => {
 			const files = out.errors.map((e) => e.message).sort();
 			expect(files.some((m) => m.includes("src/a.ts"))).toBe(true);
 			expect(files.some((m) => m.includes("src/b.ts"))).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("extractBusManifest: fidelity + assembly", () => {
+	it("slices generics, mapped, conditional, and template-literal types verbatim", () => {
+		const decls = [
+			`export type Keys<T> = { [K in keyof T]: T[K] extends string ? K : never };`,
+			`export type Route = \`/api/\${string}\`;`,
+			`export interface Paged<T> {\n\titems: T[];\n\tnext?: Route;\n}`,
+		].join("\n");
+		const { dir, cleanup } = makeBusFixture({ "src/bus.chowbea.ts": `${decls}\n` });
+		try {
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			expect(errors).toEqual([]);
+			const byName = Object.fromEntries(
+				Object.values(manifest!.barrels).flat().map((e) => [e.name, e.declaration]),
+			);
+			expect(byName.Keys).toBe(
+				`export type Keys<T> = { [K in keyof T]: T[K] extends string ? K : never };`,
+			);
+			expect(byName.Route).toBe("export type Route = `/api/${string}`;");
+			expect(byName.Paged).toContain("next?: Route;");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("returns null manifest when any error exists", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export const nope = 1;\n`,
+		});
+		try {
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir });
+			expect(manifest).toBeNull();
+			expect(errors).toHaveLength(1);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("manifest snapshot: stable shape and version", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/exams/grade.chowbea.ts": `export type Grade = "A" | "B";\n`,
+			"src/billing/plans.ts": `/** @chowbea-export */\nexport interface Plan { name: string }\n`,
+		});
+		try {
+			const { manifest } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			expect(manifest).toMatchSnapshot();
 		} finally {
 			cleanup();
 		}
