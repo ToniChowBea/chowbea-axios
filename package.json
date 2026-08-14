@@ -1,6 +1,6 @@
 {
   "name": "chowbea-axios",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Type-safe axios client with interactive TUI dashboard",
   "type": "module",
   "main": "dist/index.js",
