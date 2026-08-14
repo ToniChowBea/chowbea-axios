@@ -4,6 +4,13 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [2.6.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.5.0...v2.6.0) (2026-08-14)
+
+
+### Added
+
+* **api:** support CommonJS consumers and export DEFAULT_API_ROUTE ([#129](https://github.com/ToniChowBea/chowbea-axios/issues/129)) ([215ee59](https://github.com/ToniChowBea/chowbea-axios/commit/215ee590c9f2e265b7bd96d207dd5a7c59715fef))
+
 ## [2.5.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.4.1...v2.5.0) (2026-08-14)
 
 
