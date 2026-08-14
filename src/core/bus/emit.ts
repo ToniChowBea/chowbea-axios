@@ -13,7 +13,7 @@ function moduleName(barrelKey: string): string {
 	return barrelKey.replace(/\//g, ".");
 }
 
-function renderBarrelFile(barrelKey: string, entries: BusTypeEntry[]): string {
+function renderBarrelFile(entries: BusTypeEntry[]): string {
 	const blocks = entries.map(
 		(e) => `/** From ${e.source}:${e.line} */\n${e.declaration}`,
 	);
@@ -39,7 +39,7 @@ export function renderBusFiles(manifest: BusManifest): Record<string, string> {
 			);
 		}
 		keysByFilename[filename] = key;
-		files[filename] = renderBarrelFile(key, manifest.barrels[key]);
+		files[filename] = renderBarrelFile(manifest.barrels[key]);
 	}
 	const reexports = keys.map((k) => `export * from "./${moduleName(k)}";`);
 	files["index.ts"] = `${HEADER}\n${reexports.join("\n")}\n`;
