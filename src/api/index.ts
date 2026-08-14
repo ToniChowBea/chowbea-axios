@@ -13,6 +13,9 @@ import { parseManifest, type BusManifest } from "../core/bus/manifest.js";
 
 export type { BusManifest } from "../core/bus/manifest.js";
 
+/** Conventional mount path for {@link busHandler} — matches the frontend's default bus fetch URL. */
+export const DEFAULT_API_ROUTE = "/.well-known/chowbea.json";
+
 export function readBusManifest(manifestPath?: string): BusManifest {
 	const resolved = path.resolve(manifestPath ?? path.join(process.cwd(), "chowbea.bus.json"));
 	return parseManifest(readFileSync(resolved, "utf8"));
