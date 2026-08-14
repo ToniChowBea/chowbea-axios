@@ -30,6 +30,8 @@ import { executeResolve } from "../core/actions/resolve.js";
 import type { ResolveActionOptions } from "../core/actions/resolve.js";
 import { executeDoctor } from "../core/actions/doctor.js";
 import type { DoctorActionOptions } from "../core/actions/doctor.js";
+import { executeExtract } from "../core/actions/extract.js";
+import type { ExtractActionOptions } from "../core/actions/extract.js";
 import {
 	executeInit,
 	setupVitePlugins,
@@ -52,6 +54,7 @@ const COMMANDS = [
 	"doctor",
 	"init",
 	"plugins",
+	"extract",
 ] as const;
 
 type CommandName = (typeof COMMANDS)[number];
@@ -76,6 +79,7 @@ function printHelp(): void {
     doctor       Check (and --fix) generated cache files wrongly tracked in git
     init         Initialize chowbea-axios in your project
     plugins      Manage Vite codegen plugins (Surfaces & Side Panels)
+    extract      Extract type-bus types into chowbea.bus.json (API-repo side)
 
   ${"\x1b[1m"}GLOBAL FLAGS${"\x1b[0m"}
     -q, --quiet      Suppress non-error output
@@ -198,6 +202,16 @@ function printCommandHelp(command: CommandName): void {
                            Supports group prefix: --add surface:user/edit-user
       --surfaces-dir <dir> Override surfaces directory
       --panels-dir <dir>   Override side panels directory
+    -q, --quiet            Suppress non-error output
+    -v, --verbose          Show detailed output
+`,
+		extract: `
+  ${"\x1b[1m"}chowbea-axios extract${"\x1b[0m"} - Extract type-bus types into chowbea.bus.json (API-repo side)
+
+  ${"\x1b[1m"}FLAGS${"\x1b[0m"}
+    -p, --project <path>   Path to tsconfig.json (default: auto-discovered)
+    -o, --out <path>       Output path for the manifest (default: chowbea.bus.json)
+        --check            Validate only — never write the manifest
     -q, --quiet            Suppress non-error output
     -v, --verbose          Show detailed output
 `,
@@ -749,6 +763,43 @@ async function handlePlugins(args: string[]): Promise<void> {
 	}
 }
 
+async function handleExtract(args: string[]): Promise<void> {
+	const { values } = parseArgs({
+		args,
+		options: {
+			project: { type: "string", short: "p" },
+			out: { type: "string", short: "o" },
+			check: { type: "boolean", default: false },
+			quiet: { type: "boolean", short: "q", default: false },
+			verbose: { type: "boolean", short: "v", default: false },
+		},
+		strict: true,
+	});
+
+	const level = getLogLevel({
+		quiet: values.quiet,
+		verbose: values.verbose,
+	});
+	const logger = createLogger({ level });
+
+	const options: ExtractActionOptions = {
+		project: values.project,
+		out: values.out,
+		check: values.check ?? false,
+	};
+
+	try {
+		const result = await executeExtract(options, logger);
+		// CI gate: extraction errors or --check violations exit non-zero.
+		if (!result.ok) {
+			process.exitCode = 1;
+		}
+	} catch (error) {
+		logger.error(formatError(error));
+		process.exitCode = 1;
+	}
+}
+
 // ---- Main entry point ------------------------------------------------------
 
 /**
@@ -828,6 +879,9 @@ export async function runHeadless(
 			break;
 		case "plugins":
 			await handlePlugins(commandArgs);
+			break;
+		case "extract":
+			await handleExtract(commandArgs);
 			break;
 		default:
 			console.error(`Unknown command: ${command}`);
