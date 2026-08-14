@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
 
+import type { FetchAuthConfig } from "./config.js";
 import { NetworkError, SpecNotFoundError } from "./errors.js";
 import type { Logger } from "../adapters/logger-interface.js";
 
@@ -159,6 +160,52 @@ export function interpolateHeaders(
 }
 
 /**
+ * Builds a `Basic <base64>` Authorization header value from already-resolved
+ * (interpolated) Basic Auth credentials. Shared by spec fetching and Type
+ * Bus fetching so both apply auth the same way.
+ */
+export function buildBasicAuthHeader(auth: { username: string; password: string }): string {
+	const credentials = Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
+	return `Basic ${credentials}`;
+}
+
+/**
+ * Resolves `[fetch.auth]` Basic Auth credentials from their configured env
+ * vars, non-interactively — no prompting. Throws if either credential can't
+ * be resolved. For contexts that must never block on a TTY prompt (Type Bus
+ * sync from `fetch`/`watch`); the interactive spec-fetch path has its own
+ * prompt-capable resolver.
+ */
+export function resolveBasicAuthNonInteractive(
+	auth: FetchAuthConfig
+): { username: string; password: string } {
+	let username: string | undefined;
+	let password: string | undefined;
+	if (auth.username) {
+		try {
+			username = interpolateEnvVars(auth.username);
+		} catch {
+			// reported via the throw below
+		}
+	}
+	if (auth.password) {
+		try {
+			password = interpolateEnvVars(auth.password);
+		} catch {
+			// reported via the throw below
+		}
+	}
+	if (!username || !password) {
+		throw new Error(
+			"Basic Auth credentials are incomplete. " +
+				"Set the environment variables referenced in [fetch.auth] " +
+				"(e.g. SWAGGER_USER, SWAGGER_PASS)."
+		);
+	}
+	return { username, password };
+}
+
+/**
  * Computes SHA256 hash of a buffer.
  */
 export function computeHash(buffer: Buffer): string {
@@ -290,16 +337,13 @@ export async function fetchOpenApiSpec(options: {
 
 	// Apply Basic Auth if provided (takes precedence over any Authorization header)
 	if (options.auth) {
-		const credentials = Buffer.from(
-			`${options.auth.username}:${options.auth.password}`
-		).toString("base64");
 		// Remove any existing Authorization header (case-insensitive) to avoid duplicates
 		for (const key of Object.keys(headers)) {
 			if (key.toLowerCase() === "authorization") {
 				delete headers[key];
 			}
 		}
-		headers["Authorization"] = `Basic ${credentials}`;
+		headers["Authorization"] = buildBasicAuthHeader(options.auth);
 	}
 
 	// Load existing cache metadata

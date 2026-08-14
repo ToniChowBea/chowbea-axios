@@ -8,7 +8,9 @@
 
 import type { Logger } from "../../adapters/logger-interface.js";
 import { formatDuration } from "../../adapters/logger-interface.js";
+import { syncBusFromConfig } from "../bus/fetch.js";
 import {
+	type ApiConfig,
 	ensureOutputFolders,
 	getOutputPaths,
 	loadConfig,
@@ -171,6 +173,7 @@ export async function executeWatch(
 			headers: config.fetch?.headers,
 			hooks,
 			callbacks,
+			config,
 		});
 
 		if (failed) {
@@ -229,6 +232,7 @@ async function runCycle(options: {
 	headers?: Record<string, string>;
 	hooks: GenerationHooks;
 	callbacks?: WatchCallbacks;
+	config: ApiConfig;
 }): Promise<boolean> {
 	const {
 		cycleId,
@@ -238,6 +242,7 @@ async function runCycle(options: {
 		headers,
 		hooks,
 		callbacks,
+		config,
 	} = options;
 	const startTime = Date.now();
 
@@ -294,6 +299,16 @@ async function runCycle(options: {
 		// Heartbeat: one line per cycle so watch mode isn't silent when
 		// nothing changes. Compact format so it's tolerable at any interval.
 		if (!hasChanged) {
+			// Bus types change independently of the OpenAPI spec, so this
+			// cycle still syncs the bus even though the spec itself didn't
+			// change (spec §5/§7) — cheap when nothing changed (If-None-Match
+			// + hash compare). A sync failure here throws and is caught by
+			// the outer catch below, applying the same cycle-level
+			// backoff/consecutive-failure handling as any other cycle
+			// failure — no spec update to lose on this path since none
+			// happened this cycle.
+			await syncBusFromConfig(config, outputPaths, logger);
+
 			const durationMs = Date.now() - startTime;
 			logger.info(
 				{ cycle: cycleId, duration: formatDuration(durationMs) },
@@ -324,7 +339,6 @@ async function runCycle(options: {
 			hooks,
 		});
 
-		const durationMs = Date.now() - startTime;
 		logger.info(
 			{
 				cycleId,
@@ -334,6 +348,14 @@ async function runCycle(options: {
 			"Generation completed",
 		);
 
+		// [bus]/[fetch.auth]/[fetch.headers] sync the Type Bus alongside the
+		// spec (spec §5/§7), same as `fetch`. No-op when [bus] isn't
+		// configured. A sync failure here is caught below like any other
+		// cycle failure — same backoff/consecutive-failure handling. Safe to
+		// lose this cycle to backoff since the spec was already saved above.
+		await syncBusFromConfig(config, outputPaths, logger);
+
+		const durationMs = Date.now() - startTime;
 		callbacks?.onCycleComplete?.(cycleId, true, durationMs);
 		return false;
 	} catch (error) {

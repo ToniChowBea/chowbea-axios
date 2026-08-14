@@ -7,10 +7,12 @@
 import type { Logger } from "../../adapters/logger-interface.js";
 import { formatDuration } from "../../adapters/logger-interface.js";
 import {
+	type ApiConfig,
 	ensureOutputFolders,
 	type FetchAuthConfig,
 	getOutputPaths,
 	loadConfig,
+	type OutputPaths,
 	resolveSpecSource,
 } from "../config.js";
 import {
@@ -144,6 +146,31 @@ async function resolveBasicAuth(
 }
 
 /**
+ * Syncs the Type Bus, swallowing failures as a warning instead of failing
+ * the whole command — same fallback posture as spec fetching falling back
+ * to cache. Bus types change independently of the OpenAPI spec, so this
+ * runs on every successful fetch, whether or not the spec itself changed
+ * (spec §5/§7). No-op when `[bus]` isn't configured (syncBusFromConfig
+ * returns null and logs nothing).
+ */
+async function syncBusResilient(
+	config: ApiConfig,
+	outputPaths: OutputPaths,
+	logger: Logger,
+	resolvedAuth?: { username: string; password: string },
+): Promise<void> {
+	try {
+		const { syncBusFromConfig } = await import("../bus/fetch.js");
+		await syncBusFromConfig(config, outputPaths, logger, resolvedAuth);
+	} catch (error) {
+		logger.warn(
+			{ error: error instanceof Error ? error.message : String(error) },
+			"Type bus sync failed — continuing without updating bus files",
+		);
+	}
+}
+
+/**
  * Executes the fetch action: fetch OpenAPI spec, cache it, and generate types/operations.
  *
  * @param options - Fetch action options (replaces CLI flags)
@@ -194,6 +221,11 @@ export async function executeFetch(
 
 	let fetchResult;
 	let sourceIdentifier: string;
+	// Threaded to the bus sync below: when the spec fetch resolved Basic Auth
+	// interactively (env vars unset, prompted a human), the bus endpoint must
+	// reuse those same credentials instead of re-resolving non-interactively,
+	// which would fail outright (a bus sync has no TTY to prompt on).
+	let resolvedAuth: { username: string; password: string } | undefined;
 
 	if (specSource.type === "local") {
 		// Load from local file
@@ -214,12 +246,11 @@ export async function executeFetch(
 		// Resolve auth credentials if configured.
 		// Caller-supplied options.auth (e.g., from TUI) takes precedence
 		// over config-based env var lookup and interactive prompts.
-		let auth: { username: string; password: string } | undefined;
 		if (options.auth) {
-			auth = options.auth;
+			resolvedAuth = options.auth;
 			logger.debug("Using Basic Auth credentials from caller");
 		} else if (config.fetch?.auth?.type === "basic") {
-			auth = await resolveBasicAuth(config.fetch.auth, logger, prompts);
+			resolvedAuth = await resolveBasicAuth(config.fetch.auth, logger, prompts);
 		}
 
 		fetchResult = await fetchOpenApiSpec({
@@ -229,7 +260,7 @@ export async function executeFetch(
 			logger,
 			force: options.force,
 			headers: config.fetch?.headers,
-			auth,
+			auth: resolvedAuth,
 		});
 
 		// Handle network fallback
@@ -241,6 +272,15 @@ export async function executeFetch(
 	if (!(fetchResult.hasChanged || options.force)) {
 		logger.info("Spec unchanged, skipping generation");
 		logger.info("Use --force to regenerate anyway");
+
+		// Bus types change independently of the OpenAPI spec — sync even
+		// though the spec itself didn't change (spec §5/§7). Cheap when
+		// nothing changed (If-None-Match + hash compare). Skipped in dry-run:
+		// dry-run never writes files, and bus sync writes bus files.
+		if (!options.dryRun) {
+			await syncBusResilient(config, outputPaths, logger, resolvedAuth);
+		}
+
 		return {
 			specChanged: false,
 			fromCache: fetchResult.fromCache,
@@ -339,6 +379,13 @@ export async function executeFetch(
 		if (clientFiles.error) logger.info(`  - ${outputPaths.error}`);
 		if (clientFiles.client) logger.info(`  - ${outputPaths.client}`);
 	}
+
+	// [bus]/[fetch.auth]/[fetch.headers] sync the Type Bus alongside the spec
+	// (spec §5/§7). No-ops (returns null, no logging) when [bus] isn't
+	// configured. Shared with watch's runCycle so both entry points stay in
+	// lockstep. A bus-endpoint failure here only warns — it must not
+	// discard the types/operations that were just generated successfully.
+	await syncBusResilient(config, outputPaths, logger, resolvedAuth);
 
 	return {
 		specChanged: true,

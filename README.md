@@ -76,7 +76,10 @@ src/api/
 ├── _generated/              # Always overwritten — do not edit
 │   ├── api.types.ts         # OpenAPI-typed paths/components/operations
 │   ├── api.operations.ts    # Typed apiClient.op.<id>(...) methods
-│   └── api.contracts.ts     # Concrete interfaces (cmd+click navigation)
+│   ├── api.contracts.ts     # Concrete interfaces (cmd+click navigation)
+│   └── bus/                 # Type Bus types synced from [bus].endpoint (optional)
+│       ├── <barrel>.ts      # One file per barrel, e.g. exams.grade.ts
+│       └── index.ts         # Re-exports every barrel
 ├── api.client.ts            # Typed HTTP client (editable, generated once)
 ├── api.instance.ts          # Axios instance + auth interceptor (editable, generated once)
 ├── api.error.ts             # Result-based error handling (editable, generated once)
@@ -95,6 +98,7 @@ src/api/
 | `validate` | Validate your OpenAPI spec — 7 categories, severity-classified |
 | `diff` | Compare cached vs new spec; flags schema/parameter/response changes |
 | `plugins` | Manage Vite codegen plugins (Surfaces, Side Panels) |
+| `extract` | Extract Type Bus types into chowbea.bus.json (run in the API repo) |
 
 Run `chowbea-axios <command> --help` for command-specific flags.
 
@@ -159,6 +163,32 @@ chowbea-axios init --non-interactive \
 - `sidepanelsCodegen()` — same for `*.panel.tsx` files
 
 Scaffold them via `chowbea-axios init --with-vite-plugins` or `chowbea-axios plugins --setup`. See [docs](https://axios.chowbea.com) for the full registry pattern.
+
+## Type Bus (optional)
+
+Serves types from an API repo to frontend consumers as a versioned JSON manifest — no manual copy-pasting.
+
+**Mark exports (API repo):** put types in a `*.chowbea.ts` barrel, or tag any exported `type`/`interface`/`enum` with `/** @chowbea-export */`.
+
+```bash
+npx chowbea-axios extract   # writes chowbea.bus.json
+```
+
+```typescript
+import { readBusManifest, busHandler } from "chowbea-axios/api";
+app.use("/.well-known/chowbea.json", busHandler(readBusManifest()));
+```
+
+**Consume (frontend repo)** — add to `api.config.toml`:
+
+```toml
+[bus]
+endpoint = "https://your-api.com/.well-known/chowbea.json"
+```
+
+`fetch`/`watch` sync the bus alongside the spec: cache to `_internal/chowbea.bus.json`, emit `_generated/bus/`. `[fetch.auth]` and `[fetch.headers]` both apply to bus requests too.
+
+**CI:** API repo runs `extract --check` (invalid exports fail the build) and `extract --check --diff <baseline> --fail-on-removed` (blocks breaking removals). Frontend repo needs no extra step — the staleness check above already covers `_generated/bus/**`.
 
 ## Compatibility
 

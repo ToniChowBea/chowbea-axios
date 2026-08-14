@@ -33,6 +33,14 @@ export interface FetchConfig {
 }
 
 /**
+ * Bus configuration for consuming a published Type Bus feed.
+ */
+export interface BusConfig {
+  /** URL of the served chowbea.bus.json (conventionally /.well-known/chowbea.json). */
+  endpoint: string;
+}
+
+/**
  * Watch mode configuration for controlling debug output.
  */
 export interface WatchConfig {
@@ -83,6 +91,8 @@ export interface ApiConfig {
   };
   /** Fetch configuration for remote spec retrieval */
   fetch?: FetchConfig;
+  /** Bus configuration for consuming a published Type Bus feed */
+  bus?: BusConfig;
   /** Instance configuration for the generated axios client */
   instance: InstanceConfig;
   /** Watch mode configuration */
@@ -123,6 +133,7 @@ export const DEFAULT_CONFIG: ApiConfig = {
     folder: "src/api",
   },
   fetch: undefined,
+  bus: undefined,
   instance: DEFAULT_INSTANCE_CONFIG,
   watch: DEFAULT_WATCH_CONFIG,
 };
@@ -376,6 +387,9 @@ function validateConfig(config: unknown): ApiConfig {
   // Validate fetch section if provided (optional)
   const fetchConfig = validateFetchConfig(cfg.fetch);
 
+  // Validate bus section if provided (optional)
+  const busConfig = validateBusConfig(cfg.bus);
+
   // Validate instance section (uses defaults if missing)
   const instance = validateInstanceConfig(cfg.instance);
 
@@ -390,6 +404,7 @@ function validateConfig(config: unknown): ApiConfig {
       folder: output.folder,
     },
     fetch: fetchConfig,
+    bus: busConfig,
     instance,
     watch,
   };
@@ -476,6 +491,31 @@ function validateFetchConfig(fetch: unknown): FetchConfig | undefined {
   }
 
   return { ...(headers ? { headers } : {}), ...(auth ? { auth } : {}) };
+}
+
+/**
+ * Validates the bus configuration section.
+ */
+function validateBusConfig(bus: unknown): BusConfig | undefined {
+  // If bus section is missing, return undefined (feature inert)
+  if (bus === undefined || bus === null) {
+    return undefined;
+  }
+
+  if (typeof bus !== "object") {
+    throw new ConfigValidationError("bus", "bus section must be an object");
+  }
+
+  const busObj = bus as Record<string, unknown>;
+
+  if (typeof busObj.endpoint !== "string" || busObj.endpoint.trim() === "") {
+    throw new ConfigValidationError(
+      "bus.endpoint",
+      "bus.endpoint must be a non-empty string"
+    );
+  }
+
+  return { endpoint: busObj.endpoint };
 }
 
 /**
@@ -648,6 +688,10 @@ export interface OutputPaths {
   error: string;
   /** Path to api.client.ts (typed facade - generated once) */
   client: string;
+  /** Path to the bus output directory (generated bus artifacts) */
+  busDir: string;
+  /** Path to chowbea.bus.json (bus cache) */
+  busCache: string;
 }
 
 /**
@@ -677,6 +721,8 @@ export function getOutputPaths(
     instance: path.join(folder, "api.instance.ts"),
     error: path.join(folder, "api.error.ts"),
     client: path.join(folder, "api.client.ts"),
+    busDir: path.join(generated, "bus"),
+    busCache: path.join(internal, "chowbea.bus.json"),
   };
 }
 
