@@ -92,4 +92,34 @@ describe("syncBus", () => {
 			cleanup();
 		}
 	});
+
+	it("emission collision does not stamp the cache — retry stays a real retry", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const colliding = buildManifest(
+				{
+					"v1.2/foo": [entry("A", "export type A = 1;")],
+					"v1/2/foo": [entry("B", "export type B = 2;")],
+				},
+				new Date(0),
+			);
+			const endpoint = await serve(colliding);
+			const busCachePath = join(dir, "cache.json");
+			const busDir = join(dir, "bus");
+
+			await expect(
+				syncBus({ endpoint, busCachePath, busDir, logger: SILENT_LOGGER }),
+			).rejects.toThrow(/filename collision/);
+			expect(existsSync(busCachePath)).toBe(false);
+
+			// Same server, same manifest — must fail loud again, not silently
+			// report {fetched:false} because the (never-written) cache now
+			// "matches".
+			await expect(
+				syncBus({ endpoint, busCachePath, busDir, logger: SILENT_LOGGER }),
+			).rejects.toThrow(/filename collision/);
+		} finally {
+			cleanup();
+		}
+	});
 });

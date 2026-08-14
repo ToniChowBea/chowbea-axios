@@ -60,9 +60,13 @@ export async function syncBus(options: {
 		for (const name of diff.removed) options.logger.warn(`bus: - ${name} (removed)`);
 	}
 
+	// Emit first: writeBusFiles throws on filename collisions, and the cache
+	// must never be stamped with a manifest that failed to emit — otherwise
+	// the next sync sees a matching hash and silently reports "unchanged"
+	// while busDir stays empty (the failure would be permanently masked).
+	const written = await writeBusFiles(manifest, options.busDir);
 	await mkdir(path.dirname(options.busCachePath), { recursive: true });
 	await writeFile(options.busCachePath, `${JSON.stringify(manifest, null, "\t")}\n`, "utf8");
-	const written = await writeBusFiles(manifest, options.busDir);
 	const typeCount = Object.values(manifest.barrels).flat().length;
 	return { fetched: true, typeCount, diff, written };
 }
