@@ -1,7 +1,14 @@
 import path from "node:path";
 import ts from "typescript";
 
-import { buildManifest, hashText, type BusManifest, type BusTypeEntry, type BusTypeKind } from "./manifest.js";
+import {
+	buildManifest,
+	hashText,
+	isSafeBarrelKey,
+	type BusManifest,
+	type BusTypeEntry,
+	type BusTypeKind,
+} from "./manifest.js";
 
 export interface ExtractError {
 	message: string;
@@ -104,6 +111,21 @@ function typesOnlyError(name: string, file: string, line: number): ExtractError 
 	};
 }
 
+/**
+ * `path.relative(rootDir, fileName)` produces `..` segments when a
+ * `.chowbea.ts` barrel or `@chowbea-export`-marked file sits outside the
+ * tsconfig `rootDir` but is still part of the program (e.g. via `include`) —
+ * barrelKey/markedKey then derive an unsafe manifest key. Same rule as the
+ * network trust boundary in manifest.ts's parseManifest.
+ */
+function outOfRootDirError(relFile: string, rootDir: string): ExtractError {
+	return {
+		message: `"${relFile}" is outside the tsconfig rootDir (${rootDir}) — move it under ${rootDir} or adjust rootDir.`,
+		file: relFile,
+		line: 1,
+	};
+}
+
 /** Best-effort declared name for an error message; marked statements aren't always name-bearing. */
 function markedStatementName(stmt: ts.Statement): string {
 	if (ts.isClassDeclaration(stmt) || ts.isFunctionDeclaration(stmt)) {
@@ -165,6 +187,10 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		// Channel 1: *.chowbea.ts barrels — every export is on the bus.
 		if (sf.fileName.endsWith(BARREL_SUFFIX)) {
 			const key = barrelKey(sf.fileName, rootDir);
+			if (!isSafeBarrelKey(key)) {
+				errors.push(outOfRootDirError(relFile, rootDir));
+				continue;
+			}
 			const moduleSymbol = checker.getSymbolAtLocation(sf);
 			for (const exp of moduleSymbol ? checker.getExportsOfModule(moduleSymbol) : []) {
 				const resolved = exp.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exp) : exp;
@@ -185,10 +211,21 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		// Channel 2: /** @chowbea-export */ markers anywhere. The tag alone puts a
 		// statement on the bus — even non-type declarations, which then fail with
 		// the same "types only" error a barrel export would get (spec §8).
+		// markedKey depends only on the file, so it's resolved (and validated)
+		// once per file, the first time a marked type declaration is seen.
+		let markedFileKeyChecked = false;
+		let markedFileKey: string | null = null;
 		for (const stmt of sf.statements) {
 			if (!hasMarkerTag(stmt)) continue;
 			if (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt) || ts.isEnumDeclaration(stmt)) {
-				collectDeclaration(stmt, stmt.name.text, markedKey(sf.fileName, rootDir), {
+				if (!markedFileKeyChecked) {
+					markedFileKeyChecked = true;
+					const key = markedKey(sf.fileName, rootDir);
+					markedFileKey = isSafeBarrelKey(key) ? key : null;
+					if (markedFileKey === null) errors.push(outOfRootDirError(relFile, rootDir));
+				}
+				if (markedFileKey === null) continue;
+				collectDeclaration(stmt, stmt.name.text, markedFileKey, {
 					file: relFile,
 					line: lineOf(stmt),
 				});
@@ -212,9 +249,12 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		}
 	}
 
-	// ~ Reserved prefix: a real barrel may not produce a _marked/* key.
+	// ~ Reserved prefix: a real barrel may not produce a _marked/* key. Exact
+	// segment match, not a bare prefix — "_markedly/types" must not collide
+	// with the reserved "_marked" / "_marked/*" namespace.
 	for (const [key, items] of collected) {
-		if (key.startsWith(RESERVED_PREFIX) && items.some((i) => i.registeredAt.file.endsWith(BARREL_SUFFIX))) {
+		const isReserved = key === RESERVED_PREFIX || key.startsWith(`${RESERVED_PREFIX}/`);
+		if (isReserved && items.some((i) => i.registeredAt.file.endsWith(BARREL_SUFFIX))) {
 			const first = items[0];
 			errors.push({
 				message:

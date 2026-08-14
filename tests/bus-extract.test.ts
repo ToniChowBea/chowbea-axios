@@ -203,6 +203,53 @@ describe("extractBusTypes: validation", () => {
 		}
 	});
 
+	// Finding B2: `key.startsWith(RESERVED_PREFIX)` wrongly rejected any key
+	// beginning with the literal substring "_marked", not just the reserved
+	// "_marked" / "_marked/*" segment — "_markedly" is a legitimate directory.
+	it("a barrel under _markedly/ (shares a prefix with, but isn't, the reserved _marked/ namespace) extracts clean", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/_markedly/x.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toEqual([]);
+			expect(out.barrels["_markedly/x"]?.map((e) => e.name)).toEqual(["A"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	// Finding B1: barrelKey/markedKey derive a manifest key via
+	// `path.relative(rootDir, fileName)` — a `.chowbea.ts` file outside
+	// `rootDir` but still swept in via tsconfig `include` produces a `..`
+	// segment, the same path-traversal shape parseManifest's
+	// isSafeBarrelKey rejects at the network trust boundary.
+	it("a barrel outside the tsconfig rootDir is rejected, not turned into a path-traversal key", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"tsconfig.json": JSON.stringify({
+				compilerOptions: {
+					strict: true,
+					rootDir: "src",
+					noEmit: true,
+					skipLibCheck: true,
+					module: "nodenext",
+					moduleResolution: "nodenext",
+				},
+				include: ["src/**/*.ts", "outside/**/*.ts"],
+			}),
+			"src/empty.ts": `export {};\n`,
+			"outside/x.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain("outside the tsconfig rootDir");
+			expect(out.barrels).toEqual({});
+		} finally {
+			cleanup();
+		}
+	});
+
 	it('barrel key "index" is reserved for the generated re-export index', () => {
 		const { dir, cleanup } = makeBusFixture({
 			"src/index.chowbea.ts": `export type Special = string;\n`,
