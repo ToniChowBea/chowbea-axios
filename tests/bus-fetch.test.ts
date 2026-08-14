@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingHttpHeaders, type Server } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildBasicAuthHeader } from "../src/core/fetcher.js";
 import { buildManifest, hashText } from "../src/core/bus/manifest.js";
 import { syncBus } from "../src/core/bus/fetch.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
@@ -20,9 +21,10 @@ const entry = (name: string, declaration: string) => ({
 let server: Server | null = null;
 afterEach(() => { server?.close(); server = null; });
 
-function serve(manifest: object): Promise<string> {
+function serve(manifest: object, onRequest?: (headers: IncomingHttpHeaders) => void): Promise<string> {
 	return new Promise((resolve) => {
 		server = createServer((req, res) => {
+			onRequest?.(req.headers);
 			res.setHeader("content-type", "application/json");
 			res.end(JSON.stringify(manifest));
 		});
@@ -118,6 +120,30 @@ describe("syncBus", () => {
 			await expect(
 				syncBus({ endpoint, busCachePath, busDir, logger: SILENT_LOGGER }),
 			).rejects.toThrow(/filename collision/);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("forwards a Basic Auth Authorization header to the bus endpoint ([fetch.auth] applies to bus fetches too)", async () => {
+		const { dir, cleanup } = makeBusFixture({});
+		try {
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			let capturedAuth: string | undefined;
+			const endpoint = await serve(manifest, (headers) => {
+				capturedAuth = headers["authorization"] as string | undefined;
+			});
+			const authHeader = buildBasicAuthHeader({ username: "alice", password: "s3cret" });
+
+			await syncBus({
+				endpoint,
+				headers: { Authorization: authHeader },
+				busCachePath: join(dir, "cache.json"),
+				busDir: join(dir, "bus"),
+				logger: SILENT_LOGGER,
+			});
+
+			expect(capturedAuth).toBe(`Basic ${Buffer.from("alice:s3cret").toString("base64")}`);
 		} finally {
 			cleanup();
 		}

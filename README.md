@@ -186,7 +186,7 @@ app.use("/.well-known/chowbea.json", busHandler(readBusManifest()));
 endpoint = "https://your-api.com/.well-known/chowbea.json"
 ```
 
-`fetch`/`watch` sync the bus alongside the spec: cache to `_internal/chowbea.bus.json`, emit `_generated/bus/`. `[fetch.headers]` applies to bus requests too.
+`fetch`/`watch` sync the bus alongside the spec: cache to `_internal/chowbea.bus.json`, emit `_generated/bus/`. `[fetch.auth]` and `[fetch.headers]` both apply to bus requests too.
 
 **CI:** API repo runs `extract --check` (invalid exports fail the build) and `extract --check --diff <baseline> --fail-on-removed` (blocks breaking removals). Frontend repo needs no extra step — the staleness check above already covers `_generated/bus/**`.
 

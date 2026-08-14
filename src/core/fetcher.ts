@@ -159,6 +159,16 @@ export function interpolateHeaders(
 }
 
 /**
+ * Builds a `Basic <base64>` Authorization header value from already-resolved
+ * (interpolated) Basic Auth credentials. Shared by spec fetching and Type
+ * Bus fetching so both apply auth the same way.
+ */
+export function buildBasicAuthHeader(auth: { username: string; password: string }): string {
+	const credentials = Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
+	return `Basic ${credentials}`;
+}
+
+/**
  * Computes SHA256 hash of a buffer.
  */
 export function computeHash(buffer: Buffer): string {
@@ -290,16 +300,13 @@ export async function fetchOpenApiSpec(options: {
 
 	// Apply Basic Auth if provided (takes precedence over any Authorization header)
 	if (options.auth) {
-		const credentials = Buffer.from(
-			`${options.auth.username}:${options.auth.password}`
-		).toString("base64");
 		// Remove any existing Authorization header (case-insensitive) to avoid duplicates
 		for (const key of Object.keys(headers)) {
 			if (key.toLowerCase() === "authorization") {
 				delete headers[key];
 			}
 		}
-		headers["Authorization"] = `Basic ${credentials}`;
+		headers["Authorization"] = buildBasicAuthHeader(options.auth);
 	}
 
 	// Load existing cache metadata
