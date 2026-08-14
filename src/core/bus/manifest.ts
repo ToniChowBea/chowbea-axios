@@ -126,6 +126,14 @@ function assertValidDeclaration(name: string, kind: BusTypeKind, declaration: st
 	}
 	if (ts.isEnumDeclaration(declNode)) {
 		for (const member of declNode.members) {
+			// A computed name (`[expr] = 1`) is an arbitrary runtime expression —
+			// not caught by parseDiagnostics (computed enum names are a binder/
+			// grammar error, not a parse error, and no bind runs here) — that
+			// would execute at import time under transpile-only pipelines
+			// (Vite/esbuild, swc, babel), which don't run tsc's full checker.
+			if (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)) {
+				fail("enum member names must be a plain identifier or string literal");
+			}
 			if (!isSafeEnumInitializer(member.initializer)) {
 				fail("enum member initializers must be a string or numeric literal");
 			}

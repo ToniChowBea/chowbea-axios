@@ -180,6 +180,54 @@ describe("bus manifest", () => {
 				);
 				expect(() => parseManifest(JSON.stringify(m))).not.toThrow();
 			});
+
+			// A computed enum member name is an arbitrary runtime expression — not
+			// a parse error (it's a binder/grammar error, and no bind runs here),
+			// so it slips past the "one statement of the declared kind" checks
+			// above unless names are checked too. Under transpile-only pipelines
+			// (Vite/esbuild, swc, babel — no full tsc checker), the emitted JS
+			// would execute the computed expression at import time.
+			it("rejects an enum member with a computed name", () => {
+				const declaration = "export enum E {\n\t[x()] = 1,\n}";
+				const m = buildManifest(
+					{
+						one: [
+							{
+								name: "E",
+								kind: "enum" as const,
+								declaration,
+								source: "src/x.chowbea.ts",
+								line: 1,
+								hash: hashText(declaration),
+							},
+						],
+					},
+					new Date(0),
+				);
+				expect(() => parseManifest(JSON.stringify(m))).toThrow(
+					/enum member names must be a plain identifier or string literal/,
+				);
+			});
+
+			it("accepts enum members with plain identifier and string-literal names", () => {
+				const declaration = 'export enum E {\n\tLow = 1,\n\t"High Value" = 2,\n}';
+				const m = buildManifest(
+					{
+						one: [
+							{
+								name: "E",
+								kind: "enum" as const,
+								declaration,
+								source: "src/x.chowbea.ts",
+								line: 1,
+								hash: hashText(declaration),
+							},
+						],
+					},
+					new Date(0),
+				);
+				expect(() => parseManifest(JSON.stringify(m))).not.toThrow();
+			});
 		});
 
 		// Finding A2: a stale hash otherwise masks real declaration/barrel
