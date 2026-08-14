@@ -172,6 +172,8 @@ describe("executeExtract --watch", () => {
 			await done;
 			expect(cycles).toEqual([1, 2]);
 			stop?.();
+			// Let watcher.close() fully release the native handle before cleanup() removes the dir.
+			await new Promise((r) => setTimeout(r, 50));
 		} finally {
 			cleanup();
 		}

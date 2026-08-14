@@ -115,7 +115,11 @@ export async function executeExtract(
 					.catch((err) => logger.error(String(err)));
 			}, 300);
 		});
-		options.registerStop?.(() => watcher.close());
+		watcher.on("error", (err) => logger.error(String(err)));
+		options.registerStop?.(() => {
+			if (timer) clearTimeout(timer);
+			watcher.close();
+		});
 		// CLI path: the process stays alive on the watcher handle until SIGINT.
 		return first;
 	}
