@@ -184,4 +184,25 @@ describe("extractBusTypes: validation", () => {
 			cleanup();
 		}
 	});
+
+	it("closed world: two different non-bus types sharing a name both error (dedup is by identity, not name)", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/a.ts": `export type Hidden = 1;\n`,
+			"src/b.ts": `export type Hidden = 2;\n`,
+			"src/bus.chowbea.ts": [
+				`import type { Hidden } from "./a.js";`,
+				`import type { Hidden as AlsoHidden } from "./b.js";`,
+				`export type Uses = { a: Hidden; b: AlsoHidden };`,
+			].join("\n"),
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(2);
+			const files = out.errors.map((e) => e.message).sort();
+			expect(files.some((m) => m.includes("src/a.ts"))).toBe(true);
+			expect(files.some((m) => m.includes("src/b.ts"))).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
 });

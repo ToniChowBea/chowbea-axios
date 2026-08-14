@@ -254,7 +254,10 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 						const isLib = program.isSourceFileDefaultLibrary(targetFile);
 						const isNodeModules = targetFile.fileName.includes("/node_modules/");
 						if (!isLib && (isNodeModules || !busDeclarations.has(target))) {
-							const dedupKey = `${item.entry.name}->${resolved.name}`;
+							// Key on the resolved target's identity, not just its name —
+							// two different non-bus types that happen to share a simple
+							// name (e.g. via a renamed import) are distinct violations.
+							const dedupKey = `${item.entry.name}->${resolved.name}@${targetFile.fileName}:${lineOf(target)}`;
 							if (!seenRefs.has(dedupKey)) {
 								seenRefs.add(dedupKey);
 								errors.push(
