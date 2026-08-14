@@ -47,4 +47,48 @@ describe("chowbea-axios/api", () => {
 		expect(res.statusCode).toBe(304);
 		expect(res.body).toBe("");
 	});
+
+	// Finding F1: If-None-Match is a comma-separated list per RFC 9110 §13.1.2,
+	// each entry optionally weak (`W/"..."`), or the wildcard `*`. The naive
+	// `=== etag` check missed all of these, and 304 responses never carried
+	// their own ETag header.
+	describe("busHandler: conditional ETag completeness (finding F1)", () => {
+		it("304 response carries the etag header", () => {
+			const manifest = buildManifest({}, new Date(0));
+			const res = mockRes();
+			busHandler(manifest)({ headers: { "if-none-match": `"${manifest.hash}"` } }, res);
+			expect(res.statusCode).toBe(304);
+			expect(res.headers.etag).toBe(`"${manifest.hash}"`);
+		});
+
+		it('a weak-tagged If-None-Match (W/"<hash>") matches and answers 304', () => {
+			const manifest = buildManifest({}, new Date(0));
+			const res = mockRes();
+			busHandler(manifest)({ headers: { "if-none-match": `W/"${manifest.hash}"` } }, res);
+			expect(res.statusCode).toBe(304);
+		});
+
+		it('a comma-separated list containing the etag ("other", "<hash>") matches and answers 304', () => {
+			const manifest = buildManifest({}, new Date(0));
+			const res = mockRes();
+			busHandler(manifest)({ headers: { "if-none-match": `"other", "${manifest.hash}"` } }, res);
+			expect(res.statusCode).toBe(304);
+		});
+
+		it("a wildcard If-None-Match (*) always matches and answers 304", () => {
+			const manifest = buildManifest({}, new Date(0));
+			const res = mockRes();
+			busHandler(manifest)({ headers: { "if-none-match": "*" } }, res);
+			expect(res.statusCode).toBe(304);
+		});
+
+		it("a non-matching list answers 200 with the body and etag", () => {
+			const manifest = buildManifest({}, new Date(0));
+			const res = mockRes();
+			busHandler(manifest)({ headers: { "if-none-match": `"other", "another"` } }, res);
+			expect(res.statusCode).toBe(200);
+			expect(res.headers.etag).toBe(`"${manifest.hash}"`);
+			expect(JSON.parse(res.body).chowbeaBus).toBe("1");
+		});
+	});
 });

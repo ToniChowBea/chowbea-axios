@@ -28,12 +28,32 @@ export interface BusResponse {
 	end(body?: string): void;
 }
 
+/**
+ * Per RFC 9110 §13.1.2: `If-None-Match` is a comma-separated list of etags,
+ * each optionally weak (`W/"..."`), or the wildcard `*` (matches any
+ * representation). Weak comparison is enough here — we only compare against
+ * our own strong etag, so a client's weak-tagged copy still counts as a
+ * match.
+ */
+function matchesIfNoneMatch(headerValue: string, strongEtag: string): boolean {
+	const trimmed = headerValue.trim();
+	if (trimmed === "*") return true;
+	return trimmed
+		.split(",")
+		.map((tag) => tag.trim())
+		.map((tag) => (tag.startsWith("W/") ? tag.slice(2) : tag))
+		.includes(strongEtag);
+}
+
 export function busHandler(manifest: BusManifest): (req: BusRequest, res: BusResponse) => void {
 	const body = JSON.stringify(manifest);
 	const etag = `"${manifest.hash}"`;
 	return (req, res) => {
-		if (req.headers["if-none-match"] === etag) {
+		const ifNoneMatch = req.headers["if-none-match"];
+		const headerValue = Array.isArray(ifNoneMatch) ? ifNoneMatch.join(", ") : ifNoneMatch;
+		if (headerValue !== undefined && matchesIfNoneMatch(headerValue, etag)) {
 			res.statusCode = 304;
+			res.setHeader("etag", etag);
 			res.end();
 			return;
 		}
