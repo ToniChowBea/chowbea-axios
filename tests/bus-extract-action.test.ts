@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -92,4 +92,38 @@ describe("executeExtract --diff", () => {
 			next.cleanup();
 		}
 	});
+});
+
+describe("executeExtract --watch", () => {
+	it("re-extracts when a source file changes", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const cycles: number[] = [];
+			let stop: (() => void) | undefined;
+			const done = new Promise<void>((resolve) => {
+				void executeExtract(
+					{
+						cwd: dir,
+						watch: true,
+						onCycle: (r) => {
+							cycles.push(r.typeCount);
+							if (cycles.length === 2) resolve();
+						},
+						registerStop: (s) => { stop = s; },
+					},
+					SILENT_LOGGER,
+				);
+			});
+			// First cycle fires from the initial extraction; then touch a file.
+			await new Promise((r) => setTimeout(r, 500));
+			writeFileSync(join(dir, "src", "bus.chowbea.ts"), `export type A = 1;\nexport type B = 2;\n`);
+			await done;
+			expect(cycles).toEqual([1, 2]);
+			stop?.();
+		} finally {
+			cleanup();
+		}
+	}, 20_000);
 });

@@ -214,6 +214,7 @@ function printCommandHelp(command: CommandName): void {
         --check            Validate only — never write the manifest
         --diff <path|url>  Diff against a baseline manifest (file path or http(s) URL)
         --fail-on-removed  Fail if the diff against --diff removed any types
+        --watch            Re-extract on every .ts file change (dev loop)
     -q, --quiet            Suppress non-error output
     -v, --verbose          Show detailed output
 `,
@@ -774,6 +775,7 @@ async function handleExtract(args: string[]): Promise<void> {
 			check: { type: "boolean", default: false },
 			diff: { type: "string" },
 			"fail-on-removed": { type: "boolean", default: false },
+			watch: { type: "boolean", default: false },
 			quiet: { type: "boolean", short: "q", default: false },
 			verbose: { type: "boolean", short: "v", default: false },
 		},
@@ -792,6 +794,7 @@ async function handleExtract(args: string[]): Promise<void> {
 		check: values.check ?? false,
 		diffBaseline: values.diff,
 		failOnRemoved: values["fail-on-removed"] ?? false,
+		watch: values.watch,
 	};
 
 	try {
