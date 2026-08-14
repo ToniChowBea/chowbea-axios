@@ -57,6 +57,14 @@ jobs:
           --endpoint "${{ vars.STAGING_API_ENDPOINT || secrets.STAGING_API_ENDPOINT }}"
           --force --quiet
 
+# Type Bus (optional): if api.config.toml has a [bus] block, the fetch above
+# also syncs _generated/bus/** and the staleness check below covers it — no
+# extra step needed here.
+#
+# In the API repo's CI, add the extraction gate:
+#   - run: npx chowbea-axios extract --check
+#   - run: npx chowbea-axios extract --check --diff "$STAGING_BUS_URL" --fail-on-removed
+
       - name: Check for differences in generated code
         run: |
           if git diff --exit-code -- 'services/api/_generated/' '**/_generated/'; then
