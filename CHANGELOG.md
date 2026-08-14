@@ -4,6 +4,13 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [2.7.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.6.0...v2.7.0) (2026-08-14)
+
+
+### Added
+
+* **api:** mtime-aware file mode for busHandler so dev serves fresh extracts ([5d345cd](https://github.com/ToniChowBea/chowbea-axios/commit/5d345cd0d9430887103a36e08d8577dfb4775ce1))
+
 ## [2.6.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.5.0...v2.6.0) (2026-08-14)
 
 
