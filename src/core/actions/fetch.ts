@@ -16,6 +16,7 @@ import {
 import {
 	fetchOpenApiSpec,
 	interpolateEnvVars,
+	interpolateHeaders,
 	loadLocalSpecFile,
 	saveSpec,
 } from "../fetcher.js";
@@ -338,6 +339,22 @@ export async function executeFetch(
 		if (clientFiles.instance) logger.info(`  - ${outputPaths.instance}`);
 		if (clientFiles.error) logger.info(`  - ${outputPaths.error}`);
 		if (clientFiles.client) logger.info(`  - ${outputPaths.client}`);
+	}
+
+	if (config.bus) {
+		const { syncBus } = await import("../bus/fetch.js");
+		const busResult = await syncBus({
+			endpoint: config.bus.endpoint,
+			headers: config.fetch?.headers ? interpolateHeaders(config.fetch.headers) : undefined,
+			busCachePath: outputPaths.busCache,
+			busDir: outputPaths.busDir,
+			logger,
+		});
+		if (busResult.fetched) {
+			logger.done(`Type bus: ${busResult.typeCount} type(s) synced`);
+		} else {
+			logger.info("Type bus: unchanged");
+		}
 	}
 
 	return {

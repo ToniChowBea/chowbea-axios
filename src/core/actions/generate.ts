@@ -205,6 +205,19 @@ export async function executeGenerate(
 		if (clientFiles.client) logger.info(`  - ${outputPaths.client}`);
 	}
 
+	if (config.bus) {
+		try {
+			const { readFile } = await import("node:fs/promises");
+			const { parseManifest } = await import("../bus/manifest.js");
+			const { writeBusFiles } = await import("../bus/emit.js");
+			const manifest = parseManifest(await readFile(outputPaths.busCache, "utf8"));
+			await writeBusFiles(manifest, outputPaths.busDir);
+			logger.info("Type bus: regenerated from cache");
+		} catch {
+			logger.warn("Type bus configured but no cached manifest — run fetch first");
+		}
+	}
+
 	return {
 		operationCount: result.operationCount,
 		durationMs: Date.now() - startTime,
