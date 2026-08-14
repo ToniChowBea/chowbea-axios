@@ -299,6 +299,16 @@ async function runCycle(options: {
 		// Heartbeat: one line per cycle so watch mode isn't silent when
 		// nothing changes. Compact format so it's tolerable at any interval.
 		if (!hasChanged) {
+			// Bus types change independently of the OpenAPI spec, so this
+			// cycle still syncs the bus even though the spec itself didn't
+			// change (spec §5/§7) — cheap when nothing changed (If-None-Match
+			// + hash compare). A sync failure here throws and is caught by
+			// the outer catch below, applying the same cycle-level
+			// backoff/consecutive-failure handling as any other cycle
+			// failure — no spec update to lose on this path since none
+			// happened this cycle.
+			await syncBusFromConfig(config, outputPaths, logger);
+
 			const durationMs = Date.now() - startTime;
 			logger.info(
 				{ cycle: cycleId, duration: formatDuration(durationMs) },
@@ -341,7 +351,8 @@ async function runCycle(options: {
 		// [bus]/[fetch.auth]/[fetch.headers] sync the Type Bus alongside the
 		// spec (spec §5/§7), same as `fetch`. No-op when [bus] isn't
 		// configured. A sync failure here is caught below like any other
-		// cycle failure — same backoff/consecutive-failure handling.
+		// cycle failure — same backoff/consecutive-failure handling. Safe to
+		// lose this cycle to backoff since the spec was already saved above.
 		await syncBusFromConfig(config, outputPaths, logger);
 
 		const durationMs = Date.now() - startTime;
