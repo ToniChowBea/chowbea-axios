@@ -54,6 +54,8 @@ export async function makeTempPaths(): Promise<{
 		instance: join(root, "api.instance.ts"),
 		error: join(root, "api.error.ts"),
 		client: join(root, "api.client.ts"),
+		busDir: join(generatedDir, "bus"),
+		busCache: join(internalDir, "chowbea.bus.json"),
 	};
 
 	return {

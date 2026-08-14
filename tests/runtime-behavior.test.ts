@@ -55,6 +55,8 @@ async function makePaths(): Promise<{
 		instance: join(root, "api.instance.ts"),
 		error: join(root, "api.error.ts"),
 		client: join(root, "api.client.ts"),
+		busDir: join(generated, "bus"),
+		busCache: join(internal, "chowbea.bus.json"),
 	};
 	return {
 		paths,
