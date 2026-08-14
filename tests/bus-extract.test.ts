@@ -115,6 +115,49 @@ describe("extractBusTypes: validation", () => {
 		}
 	});
 
+	it("closed world: `typeof` a non-bus const always errors — values never ride the bus", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/consts.ts": `export const LIMIT = 10;\n`,
+			"src/bus.chowbea.ts": `import { LIMIT } from "./consts.js";\nexport type T = typeof LIMIT;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toMatch(/typeof/);
+			expect(out.errors[0].message).toMatch(/values/i);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("closed world: import(\"./x.js\").Foo referencing a non-bus type is a standard closed-world error", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/models.ts": `export type Foo = { x: number };\n`,
+			"src/bus.chowbea.ts": `export type T = import("./models.js").Foo;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain('"T" references "Foo"');
+			expect(out.errors[0].message).toContain("src/models.ts");
+			expect(out.errors[0].message).toContain(".chowbea.ts barrel or mark it @chowbea-export");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it('closed world: import("./x.js").Foo is fine when Foo is itself on the bus', () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/models.ts": `/** @chowbea-export */\nexport type Foo = { x: number };\n`,
+			"src/bus.chowbea.ts": `export type T = import("./models.js").Foo;\n`,
+		});
+		try {
+			expect(extractBusTypes({ projectRoot: dir }).errors).toEqual([]);
+		} finally {
+			cleanup();
+		}
+	});
+
 	it("closed world: TS lib built-ins, primitives, generics, and bus-to-bus refs are fine", () => {
 		const { dir, cleanup } = makeBusFixture({
 			"src/bus.chowbea.ts": [

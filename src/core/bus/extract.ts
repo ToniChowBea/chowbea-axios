@@ -256,45 +256,81 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 	const seenRefs = new Set<string>();
 	for (const items of collected.values()) {
 		for (const item of items) {
-			const visit = (node: ts.Node): void => {
-				if (ts.isTypeReferenceNode(node) || ts.isExpressionWithTypeArguments(node)) {
-					const nameNode = ts.isTypeReferenceNode(node) ? node.typeName : node.expression;
-					const symbol = checker.getSymbolAtLocation(nameNode);
-					const resolved =
-						symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-					const target = resolved?.declarations?.[0];
-					if (resolved && target && !(resolved.flags & ts.SymbolFlags.TypeParameter)) {
-						const targetFile = target.getSourceFile();
-						const isLib = program.isSourceFileDefaultLibrary(targetFile);
-						const isNodeModules = targetFile.fileName.includes("/node_modules/");
-						if (!isLib && (isNodeModules || !busDeclarations.has(target))) {
-							// Key on the resolved target's identity, not just its name —
-							// two different non-bus types that happen to share a simple
-							// name (e.g. via a renamed import) are distinct violations.
-							const dedupKey = `${item.entry.name}->${resolved.name}@${targetFile.fileName}:${lineOf(target)}`;
-							if (!seenRefs.has(dedupKey)) {
-								seenRefs.add(dedupKey);
-								errors.push(
-									isNodeModules
-										? {
-												message:
-													`"${item.entry.name}" references "${resolved.name}" from node_modules — ` +
-													`external types cannot ride the bus in v1.`,
-												file: item.entry.source,
-												line: item.entry.line,
-											}
-										: {
-												message:
-													`"${item.entry.name}" references "${resolved.name}" ` +
-													`(${toPosix(path.relative(options.projectRoot, targetFile.fileName))}:${lineOf(target)}) ` +
-													`which is not on the bus — add it to a .chowbea.ts barrel or mark it @chowbea-export.`,
-												file: item.entry.source,
-												line: item.entry.line,
-											},
-								);
+			/**
+			 * Standard closed-world check: bus member OK, non-bus project type
+			 * errors, node_modules errors. Shared by TypeReferenceNode /
+			 * ExpressionWithTypeArguments (`Foo`, `extends Foo`) and
+			 * ImportTypeNode's qualifier (`import("./x.js").Foo`) — both resolve
+			 * the same way via the checker.
+			 */
+			const checkTypeRef = (nameNode: ts.Node): void => {
+				const symbol = checker.getSymbolAtLocation(nameNode);
+				const resolved =
+					symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+				const target = resolved?.declarations?.[0];
+				if (!resolved || !target || resolved.flags & ts.SymbolFlags.TypeParameter) return;
+				const targetFile = target.getSourceFile();
+				const isLib = program.isSourceFileDefaultLibrary(targetFile);
+				const isNodeModules = targetFile.fileName.includes("/node_modules/");
+				if (isLib || (!isNodeModules && busDeclarations.has(target))) return;
+				// Key on the resolved target's identity, not just its name —
+				// two different non-bus types that happen to share a simple
+				// name (e.g. via a renamed import) are distinct violations.
+				const dedupKey = `${item.entry.name}->${resolved.name}@${targetFile.fileName}:${lineOf(target)}`;
+				if (seenRefs.has(dedupKey)) return;
+				seenRefs.add(dedupKey);
+				errors.push(
+					isNodeModules
+						? {
+								message:
+									`"${item.entry.name}" references "${resolved.name}" from node_modules — ` +
+									`external types cannot ride the bus in v1.`,
+								file: item.entry.source,
+								line: item.entry.line,
 							}
-						}
-					}
+						: {
+								message:
+									`"${item.entry.name}" references "${resolved.name}" ` +
+									`(${toPosix(path.relative(options.projectRoot, targetFile.fileName))}:${lineOf(target)}) ` +
+									`which is not on the bus — add it to a .chowbea.ts barrel or mark it @chowbea-export.`,
+								file: item.entry.source,
+								line: item.entry.line,
+							},
+				);
+			};
+
+			/**
+			 * `typeof X` always errors in v1 — values can never ride the bus,
+			 * regardless of whether X itself resolves to a bus type.
+			 */
+			const checkTypeQuery = (node: ts.TypeQueryNode): void => {
+				const symbol = checker.getSymbolAtLocation(node.exprName);
+				const resolved =
+					symbol && symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+				const target = resolved?.declarations?.[0];
+				const referencedName = resolved?.name ?? node.exprName.getText();
+				const location = target
+					? ` (${toPosix(path.relative(options.projectRoot, target.getSourceFile().fileName))}:${lineOf(target)})`
+					: "";
+				const dedupKey = `${item.entry.name}->typeof:${referencedName}${location}`;
+				if (seenRefs.has(dedupKey)) return;
+				seenRefs.add(dedupKey);
+				errors.push({
+					message:
+						`"${item.entry.name}" references "typeof ${referencedName}"${location} — ` +
+						`values can never ride the bus in v1, only type aliases, interfaces, and enums do.`,
+					file: item.entry.source,
+					line: item.entry.line,
+				});
+			};
+
+			const visit = (node: ts.Node): void => {
+				if (ts.isTypeQueryNode(node)) {
+					checkTypeQuery(node);
+				} else if (ts.isImportTypeNode(node) && node.qualifier) {
+					checkTypeRef(node.qualifier);
+				} else if (ts.isTypeReferenceNode(node) || ts.isExpressionWithTypeArguments(node)) {
+					checkTypeRef(ts.isTypeReferenceNode(node) ? node.typeName : node.expression);
 				}
 				ts.forEachChild(node, visit);
 			};
