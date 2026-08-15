@@ -1,5 +1,5 @@
 /**
- * chowbea-axios/api — the backend-side surface of the Type Bus.
+ * chowbea/api — the backend-side surface of the Type Bus.
  *
  * Deliberately tiny and framework-agnostic: read the build-time artifact,
  * serve it with ETag support. Mount in Express/Nest with one line:
@@ -76,7 +76,7 @@ function writeBusSnapshot(snapshot: BusSnapshot, req: BusRequest, res: BusRespon
 function writeBusUnavailable(res: BusResponse): void {
 	res.statusCode = 503;
 	res.setHeader("content-type", "text/plain");
-	res.end("chowbea bus manifest unavailable — run chowbea-axios extract");
+	res.end("chowbea bus manifest unavailable — run chowbea extract");
 }
 
 interface CachedBusFile {
@@ -88,7 +88,7 @@ interface CachedBusFile {
 /**
  * File-backed mode: re-stats `manifestPath` on every request (one `statSync`
  * — negligible in prod) and only re-reads + re-parses when mtime or size
- * changed, so `chowbea-axios extract` writes show up without a server
+ * changed, so `chowbea extract` writes show up without a server
  * restart. A read/parse failure (e.g. a partial write mid-`extract`) keeps
  * serving the last-good snapshot and leaves the cached mtime untouched so
  * the next request retries; with no last-good snapshot yet, it answers 503.

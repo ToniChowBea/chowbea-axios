@@ -39,7 +39,7 @@ export function QuitDialog({ onConfirm, onCancel }: QuitDialogProps) {
 				padding={1}
 				gap={1}
 			>
-				<text fg={colors.fgBright}>Quit chowbea-axios?</text>
+				<text fg={colors.fgBright}>Quit chowbea?</text>
 				<text fg={colors.fgDim}>
 					All running processes will be stopped.
 				</text>

@@ -5,7 +5,7 @@
  * accept `importPrefix` use it for project-specific path aliases (e.g. "@/",
  * "~/") in import statements.
  *
- * These are written to the user's project during `chowbea-axios init
+ * These are written to the user's project during `chowbea init
  * --with-vite-plugins` and are meant to be user-customizable after scaffolding.
  */
 

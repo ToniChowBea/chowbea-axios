@@ -141,12 +141,12 @@ export interface InitResult {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_SCRIPTS: Record<string, string> = {
-  "api:generate": "chowbea-axios generate",
-  "api:fetch": "chowbea-axios fetch",
-  "api:watch": "chowbea-axios watch",
-  "api:status": "chowbea-axios status",
-  "api:validate": "chowbea-axios validate",
-  "api:diff": "chowbea-axios diff",
+  "api:generate": "chowbea generate",
+  "api:fetch": "chowbea fetch",
+  "api:watch": "chowbea watch",
+  "api:status": "chowbea status",
+  "api:validate": "chowbea validate",
+  "api:diff": "chowbea diff",
 };
 
 // ---------------------------------------------------------------------------
@@ -373,7 +373,7 @@ async function setupScripts(
 
     if (!force) {
       const shouldUpdate = await prompts.confirm({
-        message: `Update ${toUpdate.length} existing script(s) to chowbea-axios defaults?`,
+        message: `Update ${toUpdate.length} existing script(s) to chowbea defaults?`,
         default: false,
       });
 
@@ -617,7 +617,7 @@ async function runInitialFetch(
   // Drop `shell: true` (deprecated by Node 24 / DEP0190); resolveCommand
   // handles the Windows `.cmd` shim path. Issue #16.
   const [cmd, ...dlxArgs] = getDlxCommand(pm);
-  const result = spawnSync(resolveCommand(cmd), [...dlxArgs, "chowbea-axios", "fetch"], {
+  const result = spawnSync(resolveCommand(cmd), [...dlxArgs, "chowbea", "fetch"], {
     cwd: projectRoot,
     stdio: "pipe",
   });
@@ -875,7 +875,7 @@ export async function setupVitePlugins(
     );
   }
   logger.info(
-    `  import { ${pluginImports.join(", ")} } from 'chowbea-axios/vite'`,
+    `  import { ${pluginImports.join(", ")} } from 'chowbea/vite'`,
   );
   logger.info(
     `  plugins: [${pluginCalls.join(", ")}, ...]`,
@@ -954,7 +954,7 @@ async function setupWorkflow(
 }
 
 /**
- * Append chowbea-axios gitignore entries if not already present.
+ * Append chowbea gitignore entries if not already present.
  */
 async function ensureGitignoreEntries(
   projectRoot: string,
@@ -964,7 +964,7 @@ async function ensureGitignoreEntries(
   const added = await ensureGitignoreEntry(
     projectRoot,
     entry,
-    "# chowbea-axios cache (timestamps, downloaded specs)",
+    "# chowbea cache (timestamps, downloaded specs)",
   );
   if (added) {
     logger.step("gitignore", `Added ${entry} to .gitignore`);
@@ -982,7 +982,7 @@ export async function executeInit(
   logger: Logger,
   prompts: PromptProvider,
 ): Promise<InitResult> {
-  logger.header("chowbea-axios init");
+  logger.header("chowbea init");
 
   // Find project root
   logger.step("config", "Finding project root...");

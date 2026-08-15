@@ -10,7 +10,7 @@
 #      Use a *secret* when the URL contains credentials; otherwise a
 #      repo *variable* is fine and easier to inspect.
 #
-#   2. Ensure chowbea-axios is listed as a devDependency in package.json.
+#   2. Ensure chowbea is listed as a devDependency in package.json.
 #
 #   3. (Optional) If your project uses pnpm, yarn, or bun instead of npm,
 #      replace the "Setup Node + npm install" / "Regenerate" steps below
@@ -53,7 +53,7 @@ jobs:
 
       - name: Regenerate from staging API
         run: >
-          npx chowbea-axios fetch
+          npx chowbea fetch
           --endpoint "${{ vars.STAGING_API_ENDPOINT || secrets.STAGING_API_ENDPOINT }}"
           --force --quiet
 
@@ -62,8 +62,8 @@ jobs:
 # extra step needed here.
 #
 # In the API repo's CI, add the extraction gate:
-#   - run: npx chowbea-axios extract --check
-#   - run: npx chowbea-axios extract --check --diff "$STAGING_BUS_URL" --fail-on-removed
+#   - run: npx chowbea extract --check
+#   - run: npx chowbea extract --check --diff "$STAGING_BUS_URL" --fail-on-removed
 
       - name: Check for differences in generated code
         run: |
@@ -78,7 +78,7 @@ jobs:
             echo "The generated API client in _generated/ does not match"
             echo "the staging API spec. Please run locally:"
             echo ""
-            echo "  chowbea-axios fetch"
+            echo "  chowbea fetch"
             echo ""
             echo "Then commit the updated files."
             echo ""

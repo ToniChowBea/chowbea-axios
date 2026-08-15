@@ -38,3 +38,22 @@ describe("package identity (rebrand)", () => {
 		expect(pkg.exports["./package.json"]).toBe("./package.json");
 	});
 });
+
+describe("user-facing docs use the new name", () => {
+	const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+
+	it("installs and invokes chowbea", () => {
+		expect(readme).toMatch(/npm install chowbea\b/);
+		expect(readme).toMatch(/npx chowbea init/);
+	});
+
+	it("keeps a migration note for the old name", () => {
+		expect(readme.toLowerCase()).toContain("renamed from");
+		expect(readme).toContain("chowbea-axios");
+	});
+
+	it("imports the Type Bus api surface from chowbea/api", () => {
+		expect(readme).toContain('from "chowbea/api"');
+		expect(readme).not.toContain('from "chowbea-axios/api"');
+	});
+});

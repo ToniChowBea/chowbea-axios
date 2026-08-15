@@ -64,7 +64,7 @@ export function Sidebar({
 			paddingX={1}
 			paddingY={1}
 		>
-			<text fg={colors.accent}>{"chowbea-axios"}</text>
+			<text fg={colors.accent}>{"chowbea"}</text>
 			<text fg={colors.fgDim}>
 				{"\u2500".repeat(18)}
 			</text>

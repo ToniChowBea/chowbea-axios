@@ -1,8 +1,8 @@
 /**
- * Public entry point for `chowbea-axios/vite`.
+ * Public entry point for `chowbea/vite`.
  *
  * Usage:
- *   import { surfacesCodegen, sidepanelsCodegen } from 'chowbea-axios/vite'
+ *   import { surfacesCodegen, sidepanelsCodegen } from 'chowbea/vite'
  */
 
 export { surfacesCodegen } from "./surfaces-codegen.js";

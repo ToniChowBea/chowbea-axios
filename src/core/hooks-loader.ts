@@ -2,7 +2,7 @@
  * Loader for the optional `chowbea.config.{mjs,js}` file.
  *
  * The file sits next to `api.config.toml` in the project root and can
- * export hook functions that chowbea-axios passes straight through to
+ * export hook functions that chowbea passes straight through to
  * `openapiTS()`. Use it to convert `format: date-time` to `Date`, attach
  * JSDoc validation annotations, brand opaque IDs, and so on.
  *

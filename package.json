@@ -75,13 +75,14 @@
     }
   },
   "keywords": [
-    "axios",
-    "api",
+    "cli",
+    "tui",
     "typescript",
     "openapi",
     "codegen",
-    "cli",
-    "tui"
+    "type-bus",
+    "axios",
+    "api"
   ],
   "homepage": "https://axios.chowbea.com",
   "bugs": {

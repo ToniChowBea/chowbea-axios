@@ -33,7 +33,7 @@ function mockRes() {
 	};
 }
 
-describe("chowbea-axios/api", () => {
+describe("chowbea/api", () => {
 	it("readBusManifest loads and validates the artifact", () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
@@ -202,7 +202,7 @@ describe("chowbea-axios/api", () => {
 				handler({ headers: {} }, res1);
 				expect(res1.statusCode).toBe(503);
 				expect(res1.headers["content-type"]).toBe("text/plain");
-				expect(res1.body).toBe("chowbea bus manifest unavailable — run chowbea-axios extract");
+				expect(res1.body).toBe("chowbea bus manifest unavailable — run chowbea extract");
 
 				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
 				writeFileSync(manifestPath, JSON.stringify(manifest));

@@ -34,7 +34,7 @@ export function formatStatusOutput(result: StatusResult): string {
 	const missing = pc.red("missing");
 
 	lines.push("");
-	lines.push(`  ${pc.bold("chowbea-axios status")}`);
+	lines.push(`  ${pc.bold("chowbea status")}`);
 	lines.push("");
 
 	// Which install is running — project-local vs global.
@@ -73,7 +73,7 @@ export function formatStatusOutput(result: StatusResult): string {
 		);
 	} else {
 		lines.push(
-			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("spec")))}${pc.dim("cached:")} ${no} ${pc.dim("- run 'chowbea-axios fetch' first")}`,
+			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("spec")))}${pc.dim("cached:")} ${no} ${pc.dim("- run 'chowbea fetch' first")}`,
 		);
 	}
 
@@ -130,7 +130,7 @@ export function formatStatusOutput(result: StatusResult): string {
 		);
 	} else if (nonePresent) {
 		lines.push(
-			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("client")))}${missing} ${pc.dim("- run 'chowbea-axios init' or 'chowbea-axios generate'")}`,
+			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("client")))}${missing} ${pc.dim("- run 'chowbea init' or 'chowbea generate'")}`,
 		);
 	} else {
 		let first = true;
@@ -220,7 +220,7 @@ export function formatDiffSummary(result: DiffResult): string {
 		`  ${pc.bold(`${result.added.length} added, ${result.removed.length} removed, ${result.modified.length} modified`)}`,
 	);
 	lines.push(
-		`  ${pc.dim("Run 'chowbea-axios fetch' to apply these changes")}`,
+		`  ${pc.dim("Run 'chowbea fetch' to apply these changes")}`,
 	);
 
 	return lines.join("\n");
@@ -234,13 +234,13 @@ export function formatPluginsList(result: PluginsResult): string {
 	const lines: string[] = [];
 
 	lines.push("");
-	lines.push(`  ${pc.bold("chowbea-axios plugins")}`);
+	lines.push(`  ${pc.bold("chowbea plugins")}`);
 	lines.push("");
 
 	// Surfaces section
 	if (!result.surfacesConfigured) {
 		lines.push(
-			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("surfaces")))}${pc.red("not configured")} ${pc.dim("- run 'chowbea-axios plugins --setup'")}`,
+			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("surfaces")))}${pc.red("not configured")} ${pc.dim("- run 'chowbea plugins --setup'")}`,
 		);
 	} else {
 		lines.push(
@@ -273,7 +273,7 @@ export function formatPluginsList(result: PluginsResult): string {
 	// Panels section
 	if (!result.sidepanelsConfigured) {
 		lines.push(
-			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("panels")))}${pc.red("not configured")} ${pc.dim("- run 'chowbea-axios plugins --setup'")}`,
+			`  ${pc.cyan("\u25cf")} ${pc.bold(pc.cyan(pad("panels")))}${pc.red("not configured")} ${pc.dim("- run 'chowbea plugins --setup'")}`,
 		);
 	} else {
 		lines.push(

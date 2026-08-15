@@ -117,7 +117,7 @@ describe("syncBus", () => {
 					busDir: join(dir, "bus"),
 					logger: SILENT_LOGGER,
 				}),
-			).rejects.toThrow(/upgrade chowbea-axios/i);
+			).rejects.toThrow(/upgrade chowbea/i);
 		} finally {
 			cleanup();
 		}

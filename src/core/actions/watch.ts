@@ -108,7 +108,7 @@ export async function executeWatch(
 		options.configPath,
 	);
 
-	logger.header("chowbea-axios watch");
+	logger.header("chowbea watch");
 	logger.debug("Configuration loaded successfully");
 
 	if (wasCreated) {
@@ -181,7 +181,7 @@ export async function executeWatch(
 			if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
 				logger.error(
 					{ failures: consecutiveFailures },
-					`Watch loop exiting after ${MAX_CONSECUTIVE_FAILURES} consecutive failures. Investigate and re-run 'chowbea-axios watch'.`,
+					`Watch loop exiting after ${MAX_CONSECUTIVE_FAILURES} consecutive failures. Investigate and re-run 'chowbea watch'.`,
 				);
 				callbacks?.onShutdown?.();
 				return;
