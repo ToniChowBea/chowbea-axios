@@ -535,12 +535,19 @@ Perform in this order; steps 1-2 are the happy path that avoids a manual publish
 
 1. **Pre-create the npm package** (recommended): from a logged-in machine, publish a placeholder so a Trusted Publisher entry can be attached — `npm publish` a minimal `chowbea@0.0.0` (or publish 3.0.0 directly if the release PR is already merged and tagged).
 2. **Add Trusted Publisher entries on npmjs.com** for `chowbea`: GitHub Actions, Organization `ToniChowBea`, Repository `chowbea`, Workflow `release-please.yml` (and optionally `release.yml`).
-3. **Merge this branch**, then **rename the GitHub repo** to `ToniChowBea/chowbea` (Settings → General → Repository name). Guards already expect the new slug.
-4. **Merge the `chore(main): release 3.0.0` PR** — it tags, builds, tests, and publishes `chowbea@3.0.0` via OIDC.
-5. **Publish the shim:** `cd shim && npm publish` (manual; this repo's release automation owns only the root package).
-6. **Deprecate the old name:** `npm deprecate chowbea-axios "Renamed to chowbea — npm install chowbea"`.
-7. **Update local remotes** (optional; GitHub redirects work): `git remote set-url origin git@github.com:ToniChowBea/chowbea.git`.
-8. **Consumers:** `npm i chowbea` at leisure; imports may switch from `chowbea-axios/*` to `chowbea/*` whenever convenient, or never.
+3. **Merge protocol (read before merging — this determines whether release-please cuts 3.0.0 or 2.8.0):** this repo squash-merges PRs by default. release-please derives the bump from the commit(s) that land on `main`, not from the PR's source commits, so the `feat(pkg)!:` commit on this branch is not enough by itself. Merge this PR using ONE of:
+   - A **merge commit** or **rebase merge** that preserves the `feat(pkg)!:` commit (and its `BREAKING CHANGE:` footer) unchanged in `main`'s history; or
+   - If **squash-merging** (the repo default), the squash commit's **title itself must be** `feat!: rename package to chowbea`, AND the squash commit's **body must retain the `BREAKING CHANGE:` footer verbatim** (GitHub's squash editor defaults to concatenating every commit's subject line into the body — trim it down to keep the footer, don't let it get pruned or buried).
+   If neither condition holds, release-please sees no `!`/`BREAKING CHANGE:` on `main` and cuts a minor bump (`2.8.0`) instead of `3.0.0` — the shim's pinned `"chowbea": "^3.0.0"` dependency (spec §Package 2) then can never resolve, so the shim is dead on arrival.
+4. **Merge this branch** per the protocol above.
+5. **Rename the GitHub repo** to `ToniChowBea/chowbea` (Settings → General → Repository name). Guards already expect the new slug.
+6. **Trigger release-please manually:** the rename in the previous step produces no push event, so the guarded `push: branches: [main]` trigger never fires and the release PR will not appear on its own — run `gh workflow run release-please.yml` (or re-run the skipped run from the merge in step 4) to generate it.
+7. **Verify the release PR before doing anything else:** confirm the PR release-please opens is titled `chore(main): release 3.0.0`. **STOP here — do not proceed to publish —** if it is titled `chore(main): release 2.8.0` (or anything other than `3.0.0`); that means step 3's merge protocol wasn't followed. Fix it by amending the commit on `main` (or reverting and re-merging correctly) so the `feat!:`/`BREAKING CHANGE:` signal is present, then re-trigger release-please, before continuing to step 8.
+8. **Merge the `chore(main): release 3.0.0` PR** — it tags, builds, tests, and publishes `chowbea@3.0.0` via OIDC.
+9. **Publish the shim:** `cd shim && npm publish` (manual; this repo's release automation owns only the root package).
+10. **Deprecate the old name:** `npm deprecate chowbea-axios "Renamed to chowbea — npm install chowbea"`.
+11. **Update local remotes** (optional; GitHub redirects work): `git remote set-url origin git@github.com:ToniChowBea/chowbea.git`.
+12. **Consumers:** `npm i chowbea` at leisure; imports may switch from `chowbea-axios/*` to `chowbea/*` whenever convenient, or never.
 
 ## Self-Review (completed)
 

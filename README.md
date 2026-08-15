@@ -25,6 +25,9 @@
 ---
 
 > **Renamed from `chowbea-axios`.** Install `chowbea` (`npm install chowbea`). The old package name still works via a compatibility shim, and the `chowbea-axios` command is still provided, so existing setups keep running.
+>
+> - If you have the old CLI installed globally, run `npm rm -g chowbea-axios` before `npm i -g chowbea` — npm>=7 refuses to overwrite another package's global bin (`EEXIST`) since the two are different package names.
+> - Generated-file header comments changed with the rename. The first `fetch`/`generate`/CI run after upgrading may report your generated client as out of date — regenerate once (`npx chowbea generate`) and commit the result.
 
 ## Quick Start
 
