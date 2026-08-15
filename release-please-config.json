@@ -21,7 +21,7 @@
   "packages": {
     ".": {
       "changelog-path": "CHANGELOG.md",
-      "package-name": "chowbea-axios"
+      "package-name": "chowbea"
     }
   }
 }
