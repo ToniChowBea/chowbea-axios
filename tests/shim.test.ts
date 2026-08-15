@@ -42,4 +42,10 @@ describe("chowbea-axios shim", () => {
 		expect(pkg.engines).toEqual(root.engines);
 		expect(pkg.peerDependencies ?? {}).toEqual(root.peerDependencies ?? {});
 	});
+
+	it("hardens bin.js: documents the env-forwarding loop guard and falls back across bin keys", () => {
+		const binJs = read("bin.js");
+		expect(binJs).toContain("CHOWBEA_LOCAL_DELEGATED");
+		expect(binJs).toContain('chowbea-axios"]');
+	});
 });
