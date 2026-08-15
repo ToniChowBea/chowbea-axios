@@ -1,0 +1,28 @@
+{
+	"name": "chowbea-axios",
+	"version": "3.0.0",
+	"description": "Deprecated alias for `chowbea` — install `chowbea` instead.",
+	"type": "module",
+	"license": "MIT",
+	"bin": { "chowbea-axios": "bin.js" },
+	"exports": {
+		".": { "types": "./index.d.ts", "import": "./index.js" },
+		"./vite": { "types": "./vite.d.ts", "import": "./vite.js" },
+		"./api": {
+			"types": "./api.d.ts",
+			"import": "./api.js",
+			"require": "./api.cjs"
+		}
+	},
+	"files": ["index.js", "index.d.ts", "vite.js", "vite.d.ts", "api.js", "api.d.ts", "api.cjs", "bin.js", "README.md"],
+	"dependencies": { "chowbea": "^3.0.0" },
+	"peerDependencies": {
+		"typescript": ">=5.0.0",
+		"vite": ">=5.0.0"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"repository": { "type": "git", "url": "git+ssh://git@github.com/ToniChowBea/chowbea.git", "directory": "shim" },
+	"bugs": { "url": "https://github.com/ToniChowBea/chowbea/issues" }
+}
