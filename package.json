@@ -46,8 +46,8 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.4.3",
-    "@opentui/core": "^0.4.3",
-    "@opentui/react": "^0.4.3",
+    "@opentui/core": "^0.5.3",
+    "@opentui/react": "^0.5.3",
     "openapi-typescript": "^7.13.0",
     "openapi-typescript-helpers": "^0.1.0",
     "picocolors": "^1.1.1",
