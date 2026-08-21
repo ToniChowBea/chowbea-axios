@@ -1,9 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { executeExtract } from "../src/core/actions/extract.js";
+import { executeExtract, shouldTriggerExtract } from "../src/core/actions/extract.js";
 import { parseManifest } from "../src/core/bus/manifest.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
@@ -186,4 +186,106 @@ describe("executeExtract --watch", () => {
 			cleanup();
 		}
 	}, 20_000);
+});
+
+describe("executeExtract: manifest caching", () => {
+	it("does not rewrite the manifest when nothing changed", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const first = await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			expect(first.unchanged).toBe(false);
+			expect(first.wrote).not.toBeNull();
+			const artifact = join(dir, "chowbea.bus.json");
+			const mtimeBefore = statSync(artifact).mtimeMs;
+
+			const second = await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			expect(second).toMatchObject({ ok: true, unchanged: true, wrote: null, typeCount: 1 });
+			expect(statSync(artifact).mtimeMs).toBe(mtimeBefore);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rewrites when a bus type actually changes", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			writeFileSync(join(dir, "src", "bus.chowbea.ts"), `export type A = 1;\nexport type B = 2;\n`);
+
+			const result = await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			expect(result).toMatchObject({ unchanged: false, typeCount: 2 });
+			expect(result.wrote).toBe(join(dir, "chowbea.bus.json"));
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rewrites when the manifest is missing, even if the source is unchanged", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const artifact = join(dir, "chowbea.bus.json");
+			await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			rmSync(artifact);
+
+			const result = await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			expect(result.unchanged).toBe(false);
+			expect(existsSync(artifact)).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rewrites over a corrupt manifest rather than throwing", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `export type A = 1;\n`,
+		});
+		try {
+			const artifact = join(dir, "chowbea.bus.json");
+			writeFileSync(artifact, "{ not json");
+
+			const result = await executeExtract({ cwd: dir }, SILENT_LOGGER);
+			expect(result).toMatchObject({ ok: true, unchanged: false });
+			expect(parseManifest(readFileSync(artifact, "utf8")).chowbeaBus).toBe("1");
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("shouldTriggerExtract", () => {
+	it("triggers on project TypeScript sources", () => {
+		expect(shouldTriggerExtract("src/bus.chowbea.ts")).toBe(true);
+		expect(shouldTriggerExtract("src/exams/models.ts")).toBe(true);
+		expect(shouldTriggerExtract("src/ui/widget.tsx")).toBe(true);
+	});
+
+	it("ignores build output — the NestJS dist/**.d.ts rebuild storm", () => {
+		expect(shouldTriggerExtract("dist/main.d.ts")).toBe(false);
+		expect(shouldTriggerExtract("dist/exams/grade.js")).toBe(false);
+		expect(shouldTriggerExtract("dist/exams/grade.ts")).toBe(false);
+		expect(shouldTriggerExtract("build/index.ts")).toBe(false);
+		expect(shouldTriggerExtract(".next/types/route.ts")).toBe(false);
+		expect(shouldTriggerExtract("coverage/lcov-report/x.ts")).toBe(false);
+	});
+
+	it("ignores declaration files anywhere — the extractor skips them too", () => {
+		expect(shouldTriggerExtract("src/types/global.d.ts")).toBe(false);
+	});
+
+	it("ignores node_modules and non-TypeScript files", () => {
+		expect(shouldTriggerExtract("node_modules/pkg/index.ts")).toBe(false);
+		expect(shouldTriggerExtract("chowbea.bus.json")).toBe(false);
+		expect(shouldTriggerExtract("src/README.md")).toBe(false);
+	});
+
+	it("does not reject paths that merely contain an ignored name as a substring", () => {
+		expect(shouldTriggerExtract("src/distribution/plans.chowbea.ts")).toBe(true);
+		expect(shouldTriggerExtract("src/outbox/events.ts")).toBe(true);
+	});
 });
