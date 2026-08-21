@@ -51,7 +51,11 @@
 # authorizes the publish.
 #
 # Adopters can verify provenance after install via:
-#   npm view chowbea provenance
+#   npm audit signatures
+# (verifies registry signatures + provenance attestations for installed
+# deps; `npm view <pkg> provenance` is not a provenance check — `npm view`
+# only prints package metadata fields.) The npmjs.com package page also
+# shows a green check in the Version field when provenance is present.
 #
 # Why Trusted Publishing instead of the older "Automation token" approach:
 #   - No long-lived secret to leak or rotate

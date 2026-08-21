@@ -218,7 +218,13 @@ Do NOT touch `version` (release-please owns it), `exports`, `files`, or dependen
 - [ ] **Step 4: Verify**
 
 Run: `npx vitest run package-identity`, then `npm test`, `npm run build`, `npm run test:types`.
-Also run `npm pack --dry-run` and confirm both bins appear in the packed manifest.
+`npm pack --dry-run` lists archive *files*, not bin aliases — to confirm both commands exist, inspect the packed manifest or the installed package:
+
+```bash
+node -p "Object.keys(require('./package.json').bin)"   # -> [ 'chowbea', 'chowbea-axios' ]
+```
+
+Task 3's install smoke is what actually proves both commands run.
 
 - [ ] **Step 5: Commit (BREAKING — this drives 3.0.0)**
 
@@ -401,12 +407,16 @@ Run `npm pack --dry-run` on the ROOT package and confirm no `shim/` files are in
 
 - [ ] **Step 5: Manual dual-package install smoke (record output in the report)**
 
+**Version constraint:** the shim depends on `chowbea@^3.0.0`, but the root package is still on 2.x until release-please cuts the release. Installing both tarballs side by side therefore does NOT validate the packed root — npm ignores the local tarball and tries the registry (404 pre-publish). Either run this smoke *after* `chowbea@3.0.0` is published, or pin the local tarball with an `overrides` entry as below.
+
 ```bash
 # from repo root
 npm pack                       # -> chowbea-<ver>.tgz
 cd shim && npm pack && cd ..   # -> shim/chowbea-axios-3.0.0.tgz
 TMP=$(mktemp -d) && cd "$TMP" && npm init -y >/dev/null
-npm i <abs>/chowbea-<ver>.tgz <abs>/shim/chowbea-axios-3.0.0.tgz typescript
+# Pin `chowbea` to the packed tarball so the shim resolves to it rather than the registry:
+npm pkg set overrides.chowbea="file:<abs>/chowbea-<ver>.tgz"
+npm i <abs>/shim/chowbea-axios-3.0.0.tgz typescript
 node -e "const m=require('chowbea-axios/api'); console.log(typeof m.busHandler, m.DEFAULT_API_ROUTE)"
 node --input-type=module -e "import('chowbea-axios').then(m=>console.log(Object.keys(m).length>0))"
 npx chowbea-axios --version && npx chowbea --version
