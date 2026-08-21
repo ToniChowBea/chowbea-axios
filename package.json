@@ -52,7 +52,7 @@
     "openapi-typescript-helpers": "^0.1.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.4",
-    "toml": "^4.1.1",
+    "toml": "^5.0.0",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
