@@ -4,6 +4,13 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [2.7.1](https://github.com/ToniChowBea/chowbea-axios/compare/v2.7.0...v2.7.1) (2026-08-21)
+
+
+### Fixed
+
+* **bus:** Skip unchanged manifest writes; feat: chowbea-name output naming ([#137](https://github.com/ToniChowBea/chowbea-axios/issues/137)) ([6a2898e](https://github.com/ToniChowBea/chowbea-axios/commit/6a2898eff054d1225047a264c8a62f519d380d73))
+
 ## [2.7.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.6.0...v2.7.0) (2026-08-14)
 
 
