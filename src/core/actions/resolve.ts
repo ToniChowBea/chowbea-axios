@@ -60,7 +60,7 @@ export async function executeResolve(
 	const { config, projectRoot } = await loadConfig(options.configPath);
 	const paths = getOutputPaths(config, projectRoot);
 
-	logger.header("chowbea-axios resolve");
+	logger.header("chowbea resolve");
 
 	if (!isGitRepo(projectRoot)) {
 		logger.warn("Not a git repository — nothing to resolve.");

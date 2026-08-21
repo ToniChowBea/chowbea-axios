@@ -28,7 +28,7 @@ export class ConfigError extends ChowbeaAxiosError {
 			message,
 			"CONFIG_ERROR",
 			recoveryHint ??
-				"Run 'chowbea-axios init' to create a default configuration file."
+				"Run 'chowbea init' to create a default configuration file."
 		);
 		this.name = "ConfigError";
 	}
@@ -84,7 +84,7 @@ export class SpecNotFoundError extends ChowbeaAxiosError {
 		super(
 			`OpenAPI spec not found at: ${specPath}`,
 			"SPEC_NOT_FOUND",
-			"Run 'chowbea-axios fetch' to load the spec (from api_endpoint or spec_file in api.config.toml)."
+			"Run 'chowbea fetch' to load the spec (from api_endpoint or spec_file in api.config.toml)."
 		);
 		this.name = "SpecNotFoundError";
 		this.specPath = specPath;
@@ -101,7 +101,7 @@ export class SpecParseError extends ChowbeaAxiosError {
 		super(
 			`Failed to parse OpenAPI spec: ${parseError}`,
 			"SPEC_PARSE_ERROR",
-			`The OpenAPI spec at '${specPath}' may be corrupted. Try running 'chowbea-axios fetch --force' to re-download it.`
+			`The OpenAPI spec at '${specPath}' may be corrupted. Try running 'chowbea fetch --force' to re-download it.`
 		);
 		this.name = "SpecParseError";
 		this.specPath = specPath;

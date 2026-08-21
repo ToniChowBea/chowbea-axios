@@ -1,7 +1,7 @@
 {
-  "name": "chowbea-axios",
+  "name": "chowbea",
   "version": "2.7.0",
-  "description": "Type-safe axios client with interactive TUI dashboard",
+  "description": "Type-safe API client generator and TypeScript type bus, with an interactive TUI",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,9 +18,11 @@
       "types": "./dist/api/index.d.ts",
       "import": "./dist/api/index.js",
       "require": "./dist/api/index.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
+    "chowbea": "bin/chowbea-axios.js",
     "chowbea-axios": "bin/chowbea-axios.js"
   },
   "files": [
@@ -73,21 +75,22 @@
     }
   },
   "keywords": [
-    "axios",
-    "api",
+    "cli",
+    "tui",
     "typescript",
     "openapi",
     "codegen",
-    "cli",
-    "tui"
+    "type-bus",
+    "axios",
+    "api"
   ],
   "homepage": "https://axios.chowbea.com",
   "bugs": {
-    "url": "https://github.com/ToniChowBea/chowbea-axios/issues"
+    "url": "https://github.com/ToniChowBea/chowbea/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/ToniChowBea/chowbea-axios.git"
+    "url": "git+ssh://git@github.com/ToniChowBea/chowbea.git"
   },
   "engines": {
     "node": ">=20.0.0"

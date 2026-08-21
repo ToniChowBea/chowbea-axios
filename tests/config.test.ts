@@ -94,7 +94,7 @@ describe("loadConfig (#39 — no auto-create without opt-in)", () => {
 		});
 	});
 
-	it("error message points the user at `chowbea-axios init`", async () => {
+	it("error message points the user at `chowbea init`", async () => {
 		await withTempProject(async (_root, configPath) => {
 			try {
 				await loadConfig(configPath);
@@ -104,7 +104,7 @@ describe("loadConfig (#39 — no auto-create without opt-in)", () => {
 				expect(msg).toMatch(/No api\.config\.toml/);
 				// `recoveryHint` is on the ChowbeaAxiosError instance.
 				const hint = (err as { recoveryHint?: string }).recoveryHint;
-				expect(hint).toMatch(/chowbea-axios init/);
+				expect(hint).toMatch(/chowbea init/);
 			}
 		});
 	});

@@ -185,7 +185,7 @@ export async function executeFetch(
 ): Promise<FetchActionResult> {
 	const startTime = Date.now();
 
-	logger.header("chowbea-axios fetch");
+	logger.header("chowbea fetch");
 
 	// Load configuration (auto-creates if missing)
 	logger.step("config", "Loading configuration...");

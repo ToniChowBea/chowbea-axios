@@ -63,10 +63,10 @@ type CommandName = (typeof COMMANDS)[number];
 
 function printHelp(): void {
 	console.log(`
-  ${"\x1b[1m"}chowbea-axios${"\x1b[0m"} - Type-safe axios client generator
+  ${"\x1b[1m"}chowbea${"\x1b[0m"} - Type-safe axios client generator
 
   ${"\x1b[1m"}USAGE${"\x1b[0m"}
-    chowbea-axios <command> [flags]
+    chowbea <command> [flags]
 
   ${"\x1b[1m"}COMMANDS${"\x1b[0m"}
     fetch        Fetch OpenAPI spec and generate types/operations
@@ -77,7 +77,7 @@ function printHelp(): void {
     watch        Watch for spec changes and auto-regenerate
     resolve      Resolve a merge conflict by regenerating generated files
     doctor       Check (and --fix) generated cache files wrongly tracked in git
-    init         Initialize chowbea-axios in your project
+    init         Initialize chowbea in your project
     plugins      Manage Vite codegen plugins (Surfaces & Side Panels)
     extract      Extract type-bus types into chowbea.bus.json (API-repo side)
 
@@ -88,14 +88,14 @@ function printHelp(): void {
         --version    Show version
         --headless   Force headless mode (auto-detected in non-TTY)
 
-  Run 'chowbea-axios <command> --help' for command-specific flags.
+  Run 'chowbea <command> --help' for command-specific flags.
 `);
 }
 
 function printCommandHelp(command: CommandName): void {
 	const helps: Record<CommandName, string> = {
 		fetch: `
-  ${"\x1b[1m"}chowbea-axios fetch${"\x1b[0m"} - Fetch OpenAPI spec and generate types/operations
+  ${"\x1b[1m"}chowbea fetch${"\x1b[0m"} - Fetch OpenAPI spec and generate types/operations
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>    Path to api.config.toml
@@ -109,7 +109,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose          Show detailed output
 `,
 		generate: `
-  ${"\x1b[1m"}chowbea-axios generate${"\x1b[0m"} - Generate types/operations from cached spec
+  ${"\x1b[1m"}chowbea generate${"\x1b[0m"} - Generate types/operations from cached spec
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>    Path to api.config.toml
@@ -121,7 +121,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose          Show detailed output
 `,
 		status: `
-  ${"\x1b[1m"}chowbea-axios status${"\x1b[0m"} - Show current status
+  ${"\x1b[1m"}chowbea status${"\x1b[0m"} - Show current status
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>  Path to api.config.toml
@@ -129,7 +129,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose        Show detailed output
 `,
 		diff: `
-  ${"\x1b[1m"}chowbea-axios diff${"\x1b[0m"} - Compare current vs new spec
+  ${"\x1b[1m"}chowbea diff${"\x1b[0m"} - Compare current vs new spec
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>  Path to api.config.toml
@@ -138,7 +138,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose        Show detailed output
 `,
 		validate: `
-  ${"\x1b[1m"}chowbea-axios validate${"\x1b[0m"} - Validate the OpenAPI spec
+  ${"\x1b[1m"}chowbea validate${"\x1b[0m"} - Validate the OpenAPI spec
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>  Path to api.config.toml
@@ -148,7 +148,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose        Show detailed output
 `,
 		watch: `
-  ${"\x1b[1m"}chowbea-axios watch${"\x1b[0m"} - Watch for spec changes
+  ${"\x1b[1m"}chowbea watch${"\x1b[0m"} - Watch for spec changes
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>     Path to api.config.toml
@@ -157,7 +157,7 @@ function printCommandHelp(command: CommandName): void {
     -d, --debug             Enable debug logging
 `,
 		init: `
-  ${"\x1b[1m"}chowbea-axios init${"\x1b[0m"} - Initialize chowbea-axios in your project
+  ${"\x1b[1m"}chowbea init${"\x1b[0m"} - Initialize chowbea in your project
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -f, --force              Overwrite existing files
@@ -176,7 +176,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose            Show detailed output
 `,
 		resolve: `
-  ${"\x1b[1m"}chowbea-axios resolve${"\x1b[0m"} - Resolve merge conflicts in generated files by regenerating
+  ${"\x1b[1m"}chowbea resolve${"\x1b[0m"} - Resolve merge conflicts in generated files by regenerating
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>    Path to api.config.toml
@@ -184,7 +184,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose          Show detailed output
 `,
 		doctor: `
-  ${"\x1b[1m"}chowbea-axios doctor${"\x1b[0m"} - Check for (and --fix) cache files wrongly tracked in git
+  ${"\x1b[1m"}chowbea doctor${"\x1b[0m"} - Check for (and --fix) cache files wrongly tracked in git
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -c, --config <path>    Path to api.config.toml
@@ -193,7 +193,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose          Show detailed output
 `,
 		plugins: `
-  ${"\x1b[1m"}chowbea-axios plugins${"\x1b[0m"} - Manage Vite codegen plugins (Surfaces & Side Panels)
+  ${"\x1b[1m"}chowbea plugins${"\x1b[0m"} - Manage Vite codegen plugins (Surfaces & Side Panels)
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
       --setup              Run the plugin setup wizard
@@ -206,7 +206,7 @@ function printCommandHelp(command: CommandName): void {
     -v, --verbose          Show detailed output
 `,
 		extract: `
-  ${"\x1b[1m"}chowbea-axios extract${"\x1b[0m"} - Extract type-bus types into chowbea.bus.json (API-repo side)
+  ${"\x1b[1m"}chowbea extract${"\x1b[0m"} - Extract type-bus types into chowbea.bus.json (API-repo side)
 
   ${"\x1b[1m"}FLAGS${"\x1b[0m"}
     -p, --project <path>   Path to tsconfig.json (default: auto-discovered)
@@ -681,7 +681,7 @@ async function handleInit(args: string[]): Promise<void> {
 	// inquirer call that fails mysteriously in non-TTY contexts. Issue #43.
 	if (nonInteractive && !specSource) {
 		console.error(
-			"chowbea-axios init in non-interactive mode requires either --endpoint <url> or --spec-file <path>.\n" +
+			"chowbea init in non-interactive mode requires either --endpoint <url> or --spec-file <path>.\n" +
 				"(Detected non-TTY: " + (!isTTY) + "; --non-interactive: " + (values["non-interactive"] ?? false) + ".)",
 		);
 		process.exitCode = 1;
@@ -840,9 +840,9 @@ export async function runHeadless(
 				runningRoot: findRunningPackageRoot(import.meta.url),
 				localRoot: resolveLocalInstall(process.cwd())?.root ?? null,
 			});
-			console.log(`chowbea-axios v${pkg.version} (${source})`);
+			console.log(`chowbea v${pkg.version} (${source})`);
 		} catch {
-			console.log("chowbea-axios (unknown version)");
+			console.log("chowbea (unknown version)");
 		}
 		return;
 	}

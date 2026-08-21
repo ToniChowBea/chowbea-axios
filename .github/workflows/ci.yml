@@ -1,4 +1,4 @@
-# Continuous integration for chowbea-axios itself.
+# Continuous integration for chowbea itself.
 #
 # What runs:
 #   - On every PR and every push to `main`

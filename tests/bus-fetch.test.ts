@@ -117,7 +117,9 @@ describe("syncBus", () => {
 					busDir: join(dir, "bus"),
 					logger: SILENT_LOGGER,
 				}),
-			).rejects.toThrow(/upgrade chowbea-axios/i);
+			// Must not match the pre-rename message ("...Upgrade chowbea-axios.") —
+			// anchor on the trailing period so a stray "-axios" suffix breaks the match.
+			).rejects.toThrow(/Upgrade chowbea\.$/);
 		} finally {
 			cleanup();
 		}

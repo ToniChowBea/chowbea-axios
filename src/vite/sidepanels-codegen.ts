@@ -8,7 +8,7 @@
  * scaffold content, and barrel export name.
  *
  * Usage in vite.config.ts:
- *   import { sidepanelsCodegen } from 'chowbea-axios/vite'
+ *   import { sidepanelsCodegen } from 'chowbea/vite'
  *   export default defineConfig({ plugins: [sidepanelsCodegen()] })
  */
 

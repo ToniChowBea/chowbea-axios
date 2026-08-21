@@ -40,7 +40,7 @@
 #   id-token: write        — OIDC token for npm Trusted Publishing
 #
 # npm Trusted Publisher setup (one-time, on npmjs.com — NO GitHub secret):
-#   On https://www.npmjs.com/package/chowbea-axios/access → Trusted Publisher,
+#   On https://www.npmjs.com/package/chowbea/access → Trusted Publisher,
 #   add an entry with Workflow filename: `release-please.yml` (this file —
 #   not `release.yml`, which only handles the off-cycle tag-push fallback).
 #   See .github/workflows/release.yml for the full walkthrough.
@@ -49,6 +49,13 @@ name: release-please
 on:
   push:
     branches: [main]
+  # Manual fallback: renaming the GitHub repo produces no push event, so a
+  # push guarded by the `github.repository` check below silently skips right
+  # after the rename — the same silent-outage class this repo already hit
+  # once (see the guard comment). Trigger this workflow by hand after a repo
+  # rename via `gh workflow run release-please.yml` (or re-run the skipped
+  # run) so the release PR still appears.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -60,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Defense-in-depth: only run on the canonical repo.
-    if: github.repository == 'ToniChowBea/chowbea-axios'
+    if: github.repository == 'ToniChowBea/chowbea'
     steps:
       - name: Run release-please
         id: release

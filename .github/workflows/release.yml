@@ -13,7 +13,7 @@
 # what we want once 2.0.0 graduates out of alpha). Prerelease publishes
 # leave the published version reachable only by exact version; if you
 # want them under the `alpha` or `experimental` tag, set it manually
-# after the publish lands: `npm dist-tag add chowbea-axios@<ver> alpha`.
+# after the publish lands: `npm dist-tag add chowbea@<ver> alpha`.
 #
 # PRIMARY publish path: release-please.yml (inline publish on merge).
 # This workflow (release.yml) is only the FALLBACK for off-cycle tag-pushes,
@@ -23,19 +23,26 @@
 # the experimental tag-push path.
 #
 # REQUIRED SETUP (one-time, on npmjs.com — NO GitHub secret needed):
-#   1. Sign in to npmjs.com and go to the chowbea-axios package settings:
-#        https://www.npmjs.com/package/chowbea-axios/access
+#   1. Sign in to npmjs.com and go to the chowbea package settings:
+#        https://www.npmjs.com/package/chowbea/access
 #   2. Find the "Trusted Publisher" section → Add publisher.
 #   3. Fill in (primary, required for every release):
 #        Publisher:           GitHub Actions
-#        Organization or user: oddFEELING
-#        Repository:          chowbea-axios
+#        Organization or user: ToniChowBea
+#        Repository:          chowbea
 #        Workflow filename:   release-please.yml
 #        Environment name:    (leave blank — we don't use GitHub Environments)
 #   4. Save.
 #   5. OPTIONAL: add a SECOND publisher entry with Workflow filename
 #      `release.yml` if you also want to use the experimental tag-push
 #      path. Skip this if you only release through release-please.
+#
+#   NOTE: a Trusted Publisher entry can only be created once the `chowbea`
+#   package already exists on npm (the "Trusted Publisher" section above
+#   only appears on an existing package's settings page). So the first
+#   `chowbea` publish is either a pre-created placeholder (`npm publish` a
+#   minimal `chowbea@0.0.0` from a logged-in machine) or a one-off manual
+#   publish from the release tag — see the post-merge runbook.
 #
 # That's the entire setup. No NPM_TOKEN secret in this repo, no long-lived
 # access tokens to rotate. The OIDC token GitHub mints for whichever
@@ -44,7 +51,11 @@
 # authorizes the publish.
 #
 # Adopters can verify provenance after install via:
-#   npm view chowbea-axios provenance
+#   npm audit signatures
+# (verifies registry signatures + provenance attestations for installed
+# deps; `npm view <pkg> provenance` is not a provenance check — `npm view`
+# only prints package metadata fields.) The npmjs.com package page also
+# shows a green check in the Version field when provenance is present.
 #
 # Why Trusted Publishing instead of the older "Automation token" approach:
 #   - No long-lived secret to leak or rotate
@@ -95,7 +106,7 @@ jobs:
     # not forks or accidental tag mirrors. (Trusted Publisher config on
     # npmjs is already scoped to this repo, but the extra guard avoids
     # spending CI minutes on doomed publishes from forks.)
-    if: github.repository == 'ToniChowBea/chowbea-axios'
+    if: github.repository == 'ToniChowBea/chowbea'
     env:
       # Unified tag reference for both triggers:
       #   - push:tags        → github.ref_name is the tag (e.g. "v2.0.0")

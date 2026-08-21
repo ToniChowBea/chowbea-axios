@@ -29,7 +29,7 @@ export class BusVersionError extends Error {
 	constructor(found: string) {
 		super(
 			`Unsupported chowbea bus manifest version "${found}" (this CLI supports "${BUS_VERSION}"). ` +
-				`Upgrade chowbea-axios.`,
+				`Upgrade chowbea.`,
 		);
 		this.name = "BusVersionError";
 	}

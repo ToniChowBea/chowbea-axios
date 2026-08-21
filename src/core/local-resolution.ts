@@ -1,12 +1,12 @@
 /**
  * Local-first execution resolution.
  *
- * When the globally-installed `chowbea-axios` is run inside a project that has
- * its own copy as a dependency, the CLI hands off to that project-local copy so
- * the pinned version is what actually runs (mirroring how the router already
- * re-execs itself under Bun). These helpers decide whether to delegate and
- * report which install is running, kept pure so they can be unit-tested with
- * injected paths.
+ * When the globally-installed CLI (`chowbea`, formerly `chowbea-axios`) is run
+ * inside a project that has its own copy as a dependency, the CLI hands off to
+ * that project-local copy so the pinned version is what actually runs
+ * (mirroring how the router already re-execs itself under Bun). These helpers
+ * decide whether to delegate and report which install is running, kept pure
+ * so they can be unit-tested with injected paths.
  */
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface LocalInstall {
-	/** Canonical root of the project-local `chowbea-axios` package. */
+	/** Canonical root of the project-local CLI (`chowbea` or `chowbea-axios`) package. */
 	root: string;
 	/** Absolute path to its `bin` entry. */
 	binPath: string;
@@ -88,37 +88,58 @@ export function findRunningPackageRoot(importMetaUrl: string): string {
 	}
 }
 
+/** Package directory names this CLI answers to, in resolution order. */
+const PACKAGE_NAMES = ["chowbea", "chowbea-axios"] as const;
+/** Bin keys to accept inside a resolved package, in preference order. */
+const BIN_KEYS = ["chowbea", "chowbea-axios"] as const;
+
+/** Read and validate a candidate `package.json`, or `null` if it has no usable bin. */
+function readInstall(pkgJsonPath: string): LocalInstall | null {
+	try {
+		const root = canonical(dirname(pkgJsonPath));
+		const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as {
+			bin?: string | Record<string, string>;
+		};
+		const bin = pkg.bin;
+		const binRel =
+			typeof bin === "string"
+				? bin
+				: BIN_KEYS.map((k) => bin?.[k]).find(Boolean);
+		if (!binRel) return null;
+		return { root, binPath: join(root, binRel) };
+	} catch {
+		return null;
+	}
+}
+
 /**
- * Resolve the project-local `chowbea-axios` install for a working directory by
- * walking up the `node_modules` chain — returning its canonical root and `bin`
- * entry, or `null` if the project has no local copy.
+ * Resolve the project-local CLI (`chowbea`, formerly `chowbea-axios`) install
+ * for a working directory by walking up the `node_modules` chain — returning
+ * its canonical root and `bin` entry, or `null` if the project has no local
+ * copy.
  *
- * A manual walk (rather than `require.resolve`) is deliberate: the running CLI
- * is itself named `chowbea-axios`, so `require.resolve("chowbea-axios/...")`
- * would self-reference the running package (and hit its `exports` map) instead
- * of finding the project-local dependency.
+ * At each `node_modules` directory, `chowbea` is tried before `chowbea-axios`:
+ * the transitional shim package depends on the real package, so a project
+ * with the shim installed has both directories, and preferring `chowbea`
+ * delegates straight to the real CLI instead of hopping through the shim. A
+ * package directory found but lacking a usable bin doesn't abort the walk —
+ * the sibling name is tried before moving up to the parent directory.
+ *
+ * A manual walk (rather than `require.resolve`) is deliberate: the running
+ * CLI may itself be named `chowbea` or `chowbea-axios`, so
+ * `require.resolve("chowbea/...")` could self-reference the running package
+ * (and hit its `exports` map) instead of finding the project-local
+ * dependency.
  */
 export function resolveLocalInstall(cwd: string): LocalInstall | null {
 	let dir = canonical(cwd);
 	while (true) {
-		const pkgJsonPath = join(
-			dir,
-			"node_modules",
-			"chowbea-axios",
-			"package.json",
-		);
-		if (existsSync(pkgJsonPath)) {
-			try {
-				const root = canonical(dirname(pkgJsonPath));
-				const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8")) as {
-					bin?: string | Record<string, string>;
-				};
-				const binRel =
-					typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.["chowbea-axios"];
-				if (!binRel) return null;
-				return { root, binPath: join(root, binRel) };
-			} catch {
-				return null;
+		for (const name of PACKAGE_NAMES) {
+			const pkgJsonPath = join(dir, "node_modules", name, "package.json");
+			if (existsSync(pkgJsonPath)) {
+				const install = readInstall(pkgJsonPath);
+				if (install) return install;
+				// found but unusable — try the sibling name, then keep walking
 			}
 		}
 		const parent = dirname(dir);

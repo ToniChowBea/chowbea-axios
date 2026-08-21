@@ -72,7 +72,7 @@ export async function executeGenerate(
 ): Promise<GenerateActionResult> {
 	const startTime = Date.now();
 
-	logger.header("chowbea-axios generate");
+	logger.header("chowbea generate");
 
 	// Load configuration (auto-creates if missing)
 	logger.step("config", "Loading configuration...");

@@ -76,7 +76,7 @@ function maybeDelegateToLocal(argv: string[]): void {
 
 	if (result.error) {
 		console.error(
-			`chowbea-axios: could not run the project-local install ` +
+			`chowbea: could not run the project-local install ` +
 				`(${result.error.message}); continuing with the global one.`,
 		);
 		return;
@@ -132,7 +132,7 @@ export async function route(argv: string[]): Promise<void> {
 			// produce confusing dual output (#45).
 			console.log(
 				"TUI dashboard requires Bun. Install Bun (https://bun.sh) or use headless mode:\n" +
-					"  chowbea-axios <command>\n",
+					"  chowbea <command>\n",
 			);
 			return;
 		}

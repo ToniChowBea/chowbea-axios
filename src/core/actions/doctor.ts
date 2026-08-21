@@ -25,7 +25,7 @@ import { ensureGitignoreEntry, isGitignored } from "./env-manager.js";
 
 const INTERNAL_IGNORE_ENTRY = "_internal/";
 const INTERNAL_IGNORE_COMMENT =
-	"# chowbea-axios cache (timestamps, downloaded specs)";
+	"# chowbea cache (timestamps, downloaded specs)";
 
 export interface DoctorActionOptions {
 	configPath?: string;
@@ -57,7 +57,7 @@ export async function executeDoctor(
 	const { config, projectRoot } = await loadConfig(options.configPath);
 	const paths = getOutputPaths(config, projectRoot);
 
-	logger.header("chowbea-axios doctor");
+	logger.header("chowbea doctor");
 
 	if (!isGitRepo(projectRoot)) {
 		logger.warn("Not a git repository — nothing to check.");
@@ -110,7 +110,7 @@ export async function executeDoctor(
 
 	if (!fix) {
 		logger.info(
-			"Run 'chowbea-axios doctor --fix' to untrack the cache and ignore it.",
+			"Run 'chowbea doctor --fix' to untrack the cache and ignore it.",
 		);
 		return {
 			isGitRepo: true,

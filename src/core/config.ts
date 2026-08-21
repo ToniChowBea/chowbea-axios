@@ -602,7 +602,7 @@ export async function loadConfig(
     if (!options.autoCreate) {
       throw new ConfigError(
         `No api.config.toml found at ${resolvedConfigPath}`,
-        "Run 'chowbea-axios init' to create one.",
+        "Run 'chowbea init' to create one.",
       );
     }
     // Auto-create config with defaults (init only)
@@ -636,7 +636,7 @@ export async function loadConfig(
     if (error instanceof Error && error.message.includes("Unexpected")) {
       throw new ConfigError(
         `Failed to parse api.config.toml: ${error.message}`,
-        "Check your TOML syntax. Run 'chowbea-axios init --force' to regenerate with defaults."
+        "Check your TOML syntax. Run 'chowbea init --force' to regenerate with defaults."
       );
     }
 

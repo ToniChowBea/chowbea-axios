@@ -8,7 +8,7 @@
  * scaffold content, and barrel export name.
  *
  * Usage in vite.config.ts:
- *   import { surfacesCodegen } from 'chowbea-axios/vite'
+ *   import { surfacesCodegen } from 'chowbea/vite'
  *   export default defineConfig({ plugins: [surfacesCodegen()] })
  */
 

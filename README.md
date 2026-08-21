@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="https://axios.chowbea.com/images/chowbea-axios.png" alt="chowbea-axios" width="100%" />
+  <img src="https://axios.chowbea.com/images/chowbea-axios.png" alt="chowbea" width="100%" />
 </p>
 
-<h1 align="center">Chowbea-axios</h1>
+<h1 align="center">Chowbea</h1>
 
 <p align="center">
-  Turn your OpenAPI spec into a fully-typed Axios client. One command.
+  Turn your OpenAPI spec into a fully-typed client, with a cross-repo Type Bus and an interactive TUI. One command.
 </p>
 
 <p align="center">
@@ -15,31 +15,36 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ToniChowBea/chowbea-axios/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ToniChowBea/chowbea-axios/ci.yml?branch=main&style=flat-square&color=10b981" alt="CI" /></a>
-  <a href="https://github.com/ToniChowBea/chowbea-axios/stargazers"><img src="https://img.shields.io/github/stars/ToniChowBea/chowbea-axios?style=flat-square&color=10b981" alt="GitHub stars" /></a>
-  <a href="https://www.npmjs.com/package/chowbea-axios"><img src="https://img.shields.io/npm/v/chowbea-axios?style=flat-square&color=10b981" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/chowbea-axios"><img src="https://img.shields.io/npm/dm/chowbea-axios?style=flat-square&color=10b981" alt="npm downloads" /></a>
-  <a href="https://github.com/ToniChowBea/chowbea-axios/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10b981?style=flat-square" alt="license" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ToniChowBea/chowbea/ci.yml?branch=main&style=flat-square&color=10b981" alt="CI" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea/stargazers"><img src="https://img.shields.io/github/stars/ToniChowBea/chowbea?style=flat-square&color=10b981" alt="GitHub stars" /></a>
+  <a href="https://www.npmjs.com/package/chowbea"><img src="https://img.shields.io/npm/v/chowbea?style=flat-square&color=10b981" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/chowbea"><img src="https://img.shields.io/npm/dm/chowbea?style=flat-square&color=10b981" alt="npm downloads" /></a>
+  <a href="https://github.com/ToniChowBea/chowbea/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-10b981?style=flat-square" alt="license" /></a>
 </p>
 
 ---
+
+> **Renamed from `chowbea-axios`.** Install `chowbea` (`npm install chowbea`). The old package name still works via a compatibility shim, and the `chowbea-axios` command is still provided, so existing setups keep running.
+>
+> - If you have the old CLI installed globally, run `npm rm -g chowbea-axios` before `npm i -g chowbea` — npm>=7 refuses to overwrite another package's global bin (`EEXIST`) since the two are different package names.
+> - Generated-file header comments changed with the rename. The first `fetch`/`generate`/CI run after upgrading may report your generated client as out of date — regenerate once (`npx chowbea generate`) and commit the result.
 
 ## Quick Start
 
 ```bash
 # Initialize and configure (interactive)
-npx chowbea-axios init
+npx chowbea init
 
 # Fetch spec and generate client
-npx chowbea-axios fetch
+npx chowbea fetch
 ```
 
 Or with your preferred package manager:
 
 ```bash
-pnpm dlx chowbea-axios init
-yarn dlx chowbea-axios init
-bunx chowbea-axios init
+pnpm dlx chowbea init
+yarn dlx chowbea init
+bunx chowbea init
 ```
 
 Then import and use:
@@ -54,14 +59,14 @@ if (error) return console.error(error.message);
 console.log(data.name); // ✨ Fully typed
 ```
 
-## Why chowbea-axios?
+## Why chowbea?
 
 - **Zero manual types** — Generated directly from your OpenAPI spec
 - **Full autocomplete** — Every endpoint, parameter, and response
 - **Result-based errors** — `{ data, error }` instead of try/catch
 - **Watch mode** — Auto-regenerate when your spec changes
 - **YAML or JSON** — Both spec formats accepted at every entry point
-- **Interactive TUI** — Run `chowbea-axios` (no args) for the dashboard
+- **Interactive TUI** — Run `chowbea` (no args) for the dashboard
 - **CI-friendly** — `--non-interactive` mode plus a hardened workflow template
 
 ## What Gets Generated
@@ -100,13 +105,13 @@ src/api/
 | `plugins` | Manage Vite codegen plugins (Surfaces, Side Panels) |
 | `extract` | Extract Type Bus types into chowbea.bus.json (run in the API repo) |
 
-Run `chowbea-axios <command> --help` for command-specific flags.
+Run `chowbea <command> --help` for command-specific flags.
 
 ## Interactive Dashboard
 
 > **Status: experimental.** The TUI is functional but has no automated test coverage today. For CI pipelines, scripted workflows, and any production-adjacent use, prefer the headless commands (`fetch`, `generate`, `watch`, etc.). The dashboard is great for interactive exploration but the headless surface is what we guarantee.
 
-Running `chowbea-axios` with **no command** launches an OpenTUI dashboard with screens for fetch, generate, diff, validate, watch, plugins, env management, and an endpoint inspector. Tabs survive screen navigation, and processes (e.g. `npm run dev`) can be run alongside in the process tab.
+Running `chowbea` with **no command** launches an OpenTUI dashboard with screens for fetch, generate, diff, validate, watch, plugins, env management, and an endpoint inspector. Tabs survive screen navigation, and processes (e.g. `npm run dev`) can be run alongside in the process tab.
 
 The dashboard requires [Bun](https://bun.sh). When invoked under Node, the CLI re-launches itself under Bun automatically. If Bun isn't installed, the CLI falls back to headless mode and prints a hint.
 
@@ -149,7 +154,7 @@ The `init` wizard offers to scaffold `.github/workflows/chowbea-axios-ci.yml` �
 For non-interactive bootstrapping (e.g. project starters):
 
 ```bash
-chowbea-axios init --non-interactive \
+chowbea init --non-interactive \
   --endpoint https://staging.example.com/openapi.json \
   --output-folder src/api \
   --package-manager npm
@@ -157,12 +162,12 @@ chowbea-axios init --non-interactive \
 
 ## Vite Plugins (optional)
 
-`chowbea-axios/vite` exposes two codegen plugins for Vite projects:
+`chowbea/vite` exposes two codegen plugins for Vite projects:
 
 - `surfacesCodegen()` — auto-discovers `*.surface.tsx` files and generates a typed barrel
 - `sidepanelsCodegen()` — same for `*.panel.tsx` files
 
-Scaffold them via `chowbea-axios init --with-vite-plugins` or `chowbea-axios plugins --setup`. See [docs](https://axios.chowbea.com) for the full registry pattern.
+Scaffold them via `chowbea init --with-vite-plugins` or `chowbea plugins --setup`. See [docs](https://axios.chowbea.com) for the full registry pattern.
 
 ## Type Bus (optional)
 
@@ -171,18 +176,18 @@ Serves types from an API repo to frontend consumers as a versioned JSON manifest
 **Mark exports (API repo):** put types in a `*.chowbea.ts` barrel, or tag any exported `type`/`interface`/`enum` with `/** @chowbea-export */`.
 
 ```bash
-npx chowbea-axios extract   # writes chowbea.bus.json
+npx chowbea extract   # writes chowbea.bus.json
 ```
 
 ```typescript
-import { busHandler, DEFAULT_API_ROUTE } from "chowbea-axios/api";
+import { busHandler, DEFAULT_API_ROUTE } from "chowbea/api";
 // re-reads chowbea.bus.json when it changes — pairs with `extract --watch` in dev, one stat per request in prod
 app.use(DEFAULT_API_ROUTE, busHandler());
 ```
 
 `busHandler()` takes an optional path (defaults to `chowbea.bus.json` in `process.cwd()`), stats it on every request, and only re-reads and re-parses when the mtime or size changed — so a fresh `extract` shows up without a server restart. For a static, pre-loaded manifest (no filesystem access per request), pass a manifest directly: `busHandler(readBusManifest())`.
 
-`chowbea-axios/api` ships both ESM and CommonJS builds, so this works unmodified from ESM and CommonJS (default NestJS) backends alike.
+`chowbea/api` ships both ESM and CommonJS builds, so this works unmodified from ESM and CommonJS (default NestJS) backends alike.
 
 **Consume (frontend repo)** — add to `api.config.toml`:
 
@@ -200,8 +205,8 @@ endpoint = "https://your-api.com/.well-known/chowbea.json"
 | | |
 |---|---|
 | **Node** | `>=20` (declared in `engines`; tested in CI on 20 / 22 / 24 across Linux, macOS, Windows) |
-| **Module format** | **ESM only.** `package.json` declares `"type": "module"`. Importing from a CommonJS file with `require("chowbea-axios")` will fail with `ERR_REQUIRE_ESM`. CJS consumers should either use a dynamic `import()` or migrate the importing file to ESM. The `chowbea-axios` CLI binary is unaffected — it works regardless of your project's module format. |
-| **Vite** | Optional peer dep, `>=5.0.0`. Only required if you use the `chowbea-axios/vite` codegen plugins. |
+| **Module format** | **ESM only.** `package.json` declares `"type": "module"`. Importing from a CommonJS file with `require("chowbea")` will fail with `ERR_REQUIRE_ESM`. CJS consumers should either use a dynamic `import()` or migrate the importing file to ESM. The `chowbea` CLI binary is unaffected — it works regardless of your project's module format. |
+| **Vite** | Optional peer dep, `>=5.0.0`. Only required if you use the `chowbea/vite` codegen plugins. |
 | **Bun** | Required to launch the interactive TUI (the headless CLI works under Node alone). |
 
 ---
@@ -214,11 +219,11 @@ endpoint = "https://your-api.com/.well-known/chowbea.json"
 
 ## ⭐ Support
 
-If chowbea-axios helps you ship faster, consider giving it a star! It helps others discover the project and motivates continued development.
+If chowbea helps you ship faster, consider giving it a star! It helps others discover the project and motivates continued development.
 
 <p align="center">
-  <a href="https://github.com/ToniChowBea/chowbea-axios">
-    <img src="https://img.shields.io/badge/⭐_Star_on_GitHub-ToniChowBea%2Fchowbea--axios-10b981?style=for-the-badge&logo=github" alt="Star on GitHub" />
+  <a href="https://github.com/ToniChowBea/chowbea">
+    <img src="https://img.shields.io/badge/⭐_Star_on_GitHub-ToniChowBea%2Fchowbea-10b981?style=for-the-badge&logo=github" alt="Star on GitHub" />
   </a>
 </p>
 
