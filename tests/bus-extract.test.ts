@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { renderBusFiles } from "../src/core/bus/emit.js";
 import { extractBusManifest, extractBusTypes } from "../src/core/bus/extract.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 
@@ -358,6 +359,147 @@ describe("extractBusManifest: fidelity + assembly", () => {
 			expect(manifest).toMatchSnapshot();
 		} finally {
 			cleanup();
+		}
+	});
+});
+
+describe("chowbea-name: explicit destination file names", () => {
+	it("overrides the path-derived barrel key for a *.chowbea.ts barrel", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/exams/grade.chowbea.ts": `/** chowbea-name "grades" */\nexport type Grade = "A" | "B";\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toEqual([]);
+			expect(Object.keys(out.barrels)).toEqual(["grades"]);
+			expect(out.barrels.grades.map((e) => e.name)).toEqual(["Grade"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("decides the generated filename end to end", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/exams/grade.chowbea.ts": `/** chowbea-name "grades" */\nexport type Grade = "A";\n`,
+		});
+		try {
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			expect(errors).toEqual([]);
+			expect(Object.keys(renderBusFiles(manifest!)).sort()).toEqual(["grades.ts", "index.ts"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("accepts the @-prefixed form too", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `/** @chowbea-name "domain" */\nexport type A = 1;\n`,
+		});
+		try {
+			expect(Object.keys(extractBusTypes({ projectRoot: dir }).barrels)).toEqual(["domain"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("takes the first occurrence when a file declares several", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `/** chowbea-name "first" */\n// chowbea-name "second"\n/** chowbea-name "third" */\nexport type A = 1;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toEqual([]);
+			expect(Object.keys(out.barrels)).toEqual(["first"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("renames a marker-channel file out of the _marked/ grouping", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/billing/plans.ts": `/** chowbea-name "billing" */\n/** @chowbea-export */\nexport interface Plan { name: string }\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toEqual([]);
+			expect(Object.keys(out.barrels)).toEqual(["billing"]);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("supports a nested name, flattened on emission", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/bus.chowbea.ts": `/** chowbea-name "domain/grades" */\nexport type A = 1;\n`,
+		});
+		try {
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			expect(errors).toEqual([]);
+			expect(Object.keys(renderBusFiles(manifest!))).toContain("domain.grades.ts");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("errors when two files claim the same name", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/a.chowbea.ts": `/** chowbea-name "shared" */\nexport type A = 1;\n`,
+			"src/b.chowbea.ts": `/** chowbea-name "shared" */\nexport type B = 2;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain('chowbea-name "shared" is claimed by 2 files');
+			expect(out.errors[0].message).toContain("src/a.chowbea.ts");
+			expect(out.errors[0].message).toContain("src/b.chowbea.ts");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("errors when a name collides with another file's derived key", () => {
+		const { dir, cleanup } = makeBusFixture({
+			"src/grades.chowbea.ts": `export type A = 1;\n`,
+			"src/exams/detail.chowbea.ts": `/** chowbea-name "grades" */\nexport type B = 2;\n`,
+		});
+		try {
+			const out = extractBusTypes({ projectRoot: dir });
+			expect(out.errors).toHaveLength(1);
+			expect(out.errors[0].message).toContain("collides with types already destined for that file");
+			expect(out.errors[0].message).toContain("src/grades.chowbea.ts");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("rejects reserved names", () => {
+		for (const name of ["index", "_marked", "_marked/billing"]) {
+			const { dir, cleanup } = makeBusFixture({
+				"src/bus.chowbea.ts": `/** chowbea-name "${name}" */\nexport type A = 1;\n`,
+			});
+			try {
+				const out = extractBusTypes({ projectRoot: dir });
+				expect(out.errors).toHaveLength(1);
+				expect(out.errors[0].message).toContain("is reserved");
+			} finally {
+				cleanup();
+			}
+		}
+	});
+
+	it("rejects unsafe names and falls back to the derived key", () => {
+		for (const name of ["../evil", "a\\\\b", "/abs"]) {
+			const { dir, cleanup } = makeBusFixture({
+				"src/bus.chowbea.ts": `/** chowbea-name "${name}" */\nexport type A = 1;\n`,
+			});
+			try {
+				const out = extractBusTypes({ projectRoot: dir });
+				expect(out.errors).toHaveLength(1);
+				expect(out.errors[0].message).toContain("is not a valid output name");
+				expect(Object.keys(out.barrels)).toEqual(["bus"]);
+			} finally {
+				cleanup();
+			}
 		}
 	});
 });
