@@ -35,6 +35,50 @@ export interface ExtractActionResult {
 	typeCount: number;
 	wrote: string | null;
 	diff: BusDiff | null;
+	/** True when extraction produced content identical to the manifest already on disk, so no write happened. */
+	unchanged: boolean;
+}
+
+/** Directories that only ever hold build output or vendored code — never bus sources. */
+const IGNORED_DIRS = new Set([
+	"node_modules",
+	"dist",
+	"build",
+	"out",
+	"coverage",
+	".next",
+	".turbo",
+	".cache",
+	".git",
+]);
+
+/**
+ * Whether a changed path should trigger re-extraction.
+ *
+ * Only project TypeScript sources can contribute bus types. Declaration files
+ * are skipped by the extractor itself (`isDeclarationFile`), and build output
+ * is rewritten constantly by other watchers — a NestJS `dist/**` rebuild emits
+ * `.d.ts` files, which would otherwise re-extract on every single rebuild.
+ */
+export function shouldTriggerExtract(filename: string): boolean {
+	const normalized = filename.split(path.sep).join("/");
+	if (!normalized.endsWith(".ts") && !normalized.endsWith(".tsx")) return false;
+	if (normalized.endsWith(".d.ts")) return false;
+	return !normalized.split("/").some((segment) => IGNORED_DIRS.has(segment));
+}
+
+/**
+ * Hash of the manifest already at `outPath`, or `null` when it is absent or
+ * unreadable. Deliberately a raw parse rather than `parseManifest`: a stale or
+ * malformed artifact should simply mean "rewrite it", not throw.
+ */
+async function readExistingHash(outPath: string): Promise<string | null> {
+	try {
+		const raw = JSON.parse(await readFile(outPath, "utf8")) as { hash?: unknown };
+		return typeof raw.hash === "string" ? raw.hash : null;
+	} catch {
+		return null;
+	}
 }
 
 export async function executeExtract(
@@ -54,7 +98,7 @@ export async function executeExtract(
 				logger.error(`${err.file}:${err.line}  ${err.message}`);
 			}
 			logger.error(`Type bus extraction failed with ${errors.length} error(s).`);
-			return { ok: false, errors, typeCount: 0, wrote: null, diff: null };
+			return { ok: false, errors, typeCount: 0, wrote: null, diff: null, unchanged: false };
 		}
 
 		const typeCount = Object.values(manifest!.barrels).flat().length;
@@ -84,20 +128,30 @@ export async function executeExtract(
 				logger.error(
 					`Type bus removed ${diff.removed.length} type(s) present in the baseline — failing (--fail-on-removed).`,
 				);
-				return { ok: false, errors: [], typeCount, wrote: null, diff };
+				return { ok: false, errors: [], typeCount, wrote: null, diff, unchanged: false };
 			}
 		}
 
 		if (options.check) {
 			logger.done(`Type bus OK — ${typeCount} type(s), no violations.`);
-			return { ok: true, errors: [], typeCount, wrote: null, diff };
+			return { ok: true, errors: [], typeCount, wrote: null, diff, unchanged: false };
 		}
 
 		const outPath = path.resolve(cwd, options.out ?? "chowbea.bus.json");
+
+		// Skip the write when the extracted content matches what is already on
+		// disk. `manifest.hash` covers the barrels only — not `generatedAt` — so
+		// it is stable across runs of unchanged source, mirroring the spec-side
+		// cache. Without this, every watch cycle rewrote an identical file.
+		if ((await readExistingHash(outPath)) === manifest!.hash) {
+			logger.info(`Type bus unchanged — ${typeCount} type(s).`);
+			return { ok: true, errors: [], typeCount, wrote: null, diff, unchanged: true };
+		}
+
 		await mkdir(path.dirname(outPath), { recursive: true });
 		await writeFile(outPath, `${JSON.stringify(manifest, null, "\t")}\n`, "utf8");
 		logger.done(`Wrote ${typeCount} type(s) to ${outPath}`);
-		return { ok: true, errors: [], typeCount, wrote: outPath, diff };
+		return { ok: true, errors: [], typeCount, wrote: outPath, diff, unchanged: false };
 	}
 
 	if (options.watch) {
@@ -106,8 +160,7 @@ export async function executeExtract(
 		let timer: NodeJS.Timeout | null = null;
 		const { watch } = await import("node:fs");
 		const watcher = watch(cwd, { recursive: true }, (_event, filename) => {
-			if (!filename || !filename.endsWith(".ts")) return;
-			if (filename.includes("node_modules") || filename.includes("chowbea.bus.json")) return;
+			if (!filename || !shouldTriggerExtract(filename)) return;
 			if (timer) clearTimeout(timer);
 			timer = setTimeout(() => {
 				void runOnce()

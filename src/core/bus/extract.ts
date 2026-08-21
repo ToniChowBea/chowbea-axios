@@ -87,6 +87,30 @@ function loadProgram(
 	return { program, rootDir };
 }
 
+/** A `chowbea-name "..."` directive (the leading `@` is optional). */
+const NAME_TAG_PATTERN = /@?chowbea-name\s+["\']([^"\'\r\n]+)["\']/;
+/** Every comment in a file, in source order — block first, then line. */
+const COMMENT_PATTERN = /\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g;
+
+/**
+ * Explicit output name for a file, declared as `chowbea-name "grades"` inside
+ * any comment. It overrides the path-derived barrel key, so the frontend emits
+ * `grades.ts` instead of `exams.grade.ts`.
+ *
+ * The first occurrence in the file wins — later ones are ignored rather than
+ * erroring, so a file can never be ambiguously named.
+ */
+function explicitBarrelName(sf: ts.SourceFile): { name: string; line: number } | null {
+	const text = sf.getFullText();
+	for (const comment of text.matchAll(COMMENT_PATTERN)) {
+		const tag = NAME_TAG_PATTERN.exec(comment[0]);
+		if (!tag) continue;
+		const at = (comment.index ?? 0) + (tag.index ?? 0);
+		return { name: tag[1].trim(), line: sf.getLineAndCharacterOfPosition(at).line + 1 };
+	}
+	return null;
+}
+
 function barrelKey(fileName: string, rootDir: string): string {
 	const rel = toPosix(path.relative(rootDir, fileName));
 	return rel.slice(0, -BARREL_SUFFIX.length);
@@ -181,16 +205,57 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 		});
 	};
 
+	/** Explicit `chowbea-name` claims: output name -> the sites that claimed it. */
+	const explicitClaims = new Map<string, { file: string; line: number }[]>();
+	/** Every output key -> the files contributing to it (marker files legitimately share one). */
+	const keyContributors = new Map<string, Set<string>>();
+
+	const trackKey = (key: string, relFile: string) => {
+		const files = keyContributors.get(key) ?? new Set<string>();
+		files.add(relFile);
+		keyContributors.set(key, files);
+	};
+
+	/**
+	 * A file's output key: its `chowbea-name` directive when present and valid,
+	 * otherwise the path-derived one. An invalid name is an error that falls back
+	 * to the derived key, so the sweep still reports the file's other problems.
+	 */
+	const resolveKey = (sf: ts.SourceFile, relFile: string, derived: string): string => {
+		const explicit = explicitBarrelName(sf);
+		if (!explicit) return derived;
+		const { name, line } = explicit;
+		const reject = (why: string): string => {
+			errors.push({ message: `chowbea-name "${name}" ${why}`, file: relFile, line });
+			return derived;
+		};
+		if (!isSafeBarrelKey(name)) {
+			return reject(
+				"is not a valid output name — use a plain name like \"grades\" (no leading slash, no \"..\" segments, no backslashes).",
+			);
+		}
+		if (name === "index") {
+			return reject('is reserved — the frontend emits its own index.ts re-export barrel.');
+		}
+		if (name === RESERVED_PREFIX || name.startsWith(`${RESERVED_PREFIX}/`)) {
+			return reject(`is reserved — the "${RESERVED_PREFIX}/" namespace groups @chowbea-export types.`);
+		}
+		explicitClaims.set(name, [...(explicitClaims.get(name) ?? []), { file: relFile, line }]);
+		return name;
+	};
+
 	for (const sf of projectFiles) {
 		const relFile = toPosix(path.relative(options.projectRoot, sf.fileName));
 
 		// Channel 1: *.chowbea.ts barrels — every export is on the bus.
 		if (sf.fileName.endsWith(BARREL_SUFFIX)) {
-			const key = barrelKey(sf.fileName, rootDir);
-			if (!isSafeBarrelKey(key)) {
+			const derived = barrelKey(sf.fileName, rootDir);
+			if (!isSafeBarrelKey(derived)) {
 				errors.push(outOfRootDirError(relFile, rootDir));
 				continue;
 			}
+			const key = resolveKey(sf, relFile, derived);
+			trackKey(key, relFile);
 			const moduleSymbol = checker.getSymbolAtLocation(sf);
 			for (const exp of moduleSymbol ? checker.getExportsOfModule(moduleSymbol) : []) {
 				const resolved = exp.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exp) : exp;
@@ -220,9 +285,10 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 			if (ts.isTypeAliasDeclaration(stmt) || ts.isInterfaceDeclaration(stmt) || ts.isEnumDeclaration(stmt)) {
 				if (!markedFileKeyChecked) {
 					markedFileKeyChecked = true;
-					const key = markedKey(sf.fileName, rootDir);
-					markedFileKey = isSafeBarrelKey(key) ? key : null;
+					const derived = markedKey(sf.fileName, rootDir);
+					markedFileKey = isSafeBarrelKey(derived) ? resolveKey(sf, relFile, derived) : null;
 					if (markedFileKey === null) errors.push(outOfRootDirError(relFile, rootDir));
+					else trackKey(markedFileKey, relFile);
 				}
 				if (markedFileKey === null) continue;
 				collectDeclaration(stmt, stmt.name.text, markedFileKey, {
@@ -232,6 +298,29 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 				continue;
 			}
 			errors.push(typesOnlyError(markedStatementName(stmt), relFile, lineOf(stmt)));
+		}
+	}
+
+	// ~ Explicit output names own their file. Two files resolving to one name —
+	// whether both claimed it or one collided with another file's derived key —
+	// would silently merge into a single generated file, so both error.
+	for (const [name, claims] of explicitClaims) {
+		const claimants = [...new Set(claims.map((c) => c.file))];
+		if (claimants.length > 1) {
+			errors.push({
+				message: `chowbea-name "${name}" is claimed by ${claimants.length} files — ${claimants.join(" and ")}. Output names must be unique.`,
+				file: claims[0].file,
+				line: claims[0].line,
+			});
+			continue;
+		}
+		const others = [...(keyContributors.get(name) ?? [])].filter((f) => f !== claimants[0]);
+		if (others.length > 0) {
+			errors.push({
+				message: `chowbea-name "${name}" collides with types already destined for that file from ${others.join(", ")}. Rename one of them.`,
+				file: claims[0].file,
+				line: claims[0].line,
+			});
 		}
 	}
 
