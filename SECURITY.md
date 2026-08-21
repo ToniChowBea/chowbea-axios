@@ -34,14 +34,14 @@ We will keep you informed throughout the process. If we determine the issue is o
 |---|---|
 | Latest `chowbea` `3.x` (published as `latest`) | ✅ |
 | Latest `chowbea-axios` `3.x` (compatibility shim) | ✅ — it re-exports `chowbea`, so fixes land with the dependency |
-| Latest `chowbea-axios` `2.x` | ⚠️ Critical security fixes only, until 2027-02-15 |
-| Older `2.x` / `3.x` releases | ❌ — fix forward by upgrading |
+| Any `chowbea-axios` `2.x` release | ❌ — upgrade to `3.x` |
+| Older `3.x` releases | ❌ — fix forward by upgrading |
 | `2.0.0-alpha.*` prereleases | ❌ — superseded by `2.0.0` stable |
 | `1.x` and earlier | ❌ |
 
 We support **only the latest release** on the `latest` dist-tag. Security fixes ship as patch versions (e.g. `3.0.1`); older releases do not receive backports. The recommended response to a security advisory is to upgrade.
 
-`chowbea-axios` `2.x` receives critical security fixes for six months after the `3.0.0` release (until **2027-02-15**). The upgrade path is deliberately cheap: `3.x` is the same tool under a new package name, the `chowbea-axios` command still ships, and the `chowbea-axios` package continues to work as a shim — so upgrading is a dependency change, not a code change.
+`2.x` does not receive backports. The upgrade path is deliberately cheap: `3.x` is the same tool under a new package name, the `chowbea-axios` command still ships, and the `chowbea-axios` package continues to work as a shim — so upgrading is a dependency change, not a code change.
 
 ## Scope
 
