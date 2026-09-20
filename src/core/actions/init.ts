@@ -19,6 +19,7 @@ import {
   ensureOutputFolders,
   findProjectRoot,
   generateConfigTemplate,
+  isPinnedMode,
   getConfigPath,
   getOutputPaths,
   type InstanceConfig,
@@ -1134,7 +1135,7 @@ export async function executeInit(
   // Otherwise: never prompt in non-interactive mode, and don't ask at all
   // for a local spec source (there's nothing to sync FROM, so pinning it
   // would just be an error below in setupConfig).
-  const pinned =
+  let pinned =
     options.pinned ??
     (options.nonInteractive || specSource.kind !== "remote"
       ? false
@@ -1241,9 +1242,13 @@ export async function executeInit(
 
   // If the user declined overwrite, reload the effective config from disk
   // so subsequent steps use the persisted settings, not the wizard answers.
+  // That includes pinned mode: scaffolding pinned workflows/gitignore (or
+  // running a first sync) against a config that stayed non-pinned — or vice
+  // versa — would leave the project half in each mode.
   if (!configCreated) {
     try {
       const { config } = await loadConfig();
+      pinned = isPinnedMode(config);
       instanceConfig = {
         base_url_env: config.instance.base_url_env,
         env_accessor: config.instance.env_accessor,
