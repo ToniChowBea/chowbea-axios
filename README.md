@@ -93,6 +93,7 @@ src/api/
 | `init` | Interactive setup — creates config and base files |
 | `fetch` | Fetch spec from endpoint (or local file) and generate types |
 | `generate` | Generate from cached/local spec |
+| `sync` | Update pinned API inputs (openapi.json, chowbea.bus.json) from the stable endpoint |
 | `watch` | Watch for spec changes and auto-regenerate (with backoff on failures) |
 | `status` | Show current config, cache, and generated-file status |
 | `validate` | Validate your OpenAPI spec — 7 categories, severity-classified |
@@ -191,6 +192,9 @@ endpoint = "https://my-tunnel.ngrok.app/.well-known/chowbea.json"
 successful deploy*; the scaffolded `chowbea-sync.yml` workflow runs `sync`
 and opens a PR only when the contract changed (dispatch + daily cron +
 manual). See the comment header in `.github/workflows/chowbea-sync.yml`.
+For the sync PR's own CI checks to run, set the `token:` input in
+`chowbea-sync.yml` to a PAT or GitHub App token — the default
+`GITHUB_TOKEN` cannot trigger workflows.
 
 **New project:** `chowbea-axios init --pinned --non-interactive --endpoint https://staging.example.com/openapi.json --output-folder src/api --package-manager npm`
 

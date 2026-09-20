@@ -11,6 +11,7 @@ import { formatDuration } from "../../adapters/logger-interface.js";
 import {
 	ensureOutputFolders,
 	getOutputPaths,
+	isPinnedMode,
 	loadConfig,
 	resolveSpecSource,
 } from "../config.js";
@@ -108,6 +109,21 @@ export async function executeGenerate(
 	// For local sources, copy into the cache location so the rest of the pipeline
 	// reads from a consistent place.
 	const specSource = resolveSpecSource(config, projectRoot, options.specFile);
+
+	// Pinned mode's spec_file is a committed artifact that only `sync` writes —
+	// pointing users at `fetch` (which never touches it) is a dead-end loop.
+	// Only rewrite the message when the CLI resolved the pin from config; an
+	// explicit --spec-file flag is the user's own ad hoc path, not the pin, so
+	// it keeps the default fetch hint.
+	const rewriteForPinnedMode = isPinnedMode(config) && !options.specFile;
+	function specNotFound(specPath: string): Error {
+		return rewriteForPinnedMode
+			? new Error(
+					`pinned spec not found at ${specPath} — run \`chowbea-axios sync\` to create it`,
+				)
+			: new SpecNotFoundError(specPath);
+	}
+
 	if (specSource.type === "local") {
 		logger.info(
 			{ specFile: specSource.path },
@@ -115,7 +131,13 @@ export async function executeGenerate(
 		);
 
 		// Load and validate the spec
-		const { buffer } = await loadLocalSpec(specSource.path);
+		let buffer: Buffer;
+		try {
+			({ buffer } = await loadLocalSpec(specSource.path));
+		} catch (error) {
+			if (error instanceof SpecNotFoundError) throw specNotFound(specSource.path);
+			throw error;
+		}
 		const hash = computeHash(buffer);
 
 		// Copy to cache location
@@ -136,7 +158,7 @@ export async function executeGenerate(
 	const specExists = await hasLocalSpec(outputPaths.spec);
 
 	if (!specExists) {
-		throw new SpecNotFoundError(outputPaths.spec);
+		throw specNotFound(outputPaths.spec);
 	}
 
 	// Generate client files if they don't exist

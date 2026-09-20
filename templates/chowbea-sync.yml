@@ -17,6 +17,12 @@
 #
 #   2. If your endpoints need auth, uncomment the env block below and add
 #      the env vars referenced in [fetch.auth] as repository secrets.
+#
+#   3. PRs opened with the default GITHUB_TOKEN can't trigger other
+#      workflows (GitHub's anti-recursion rule), so the pinned CI check
+#      will NOT run on the sync PR unless you either (a) set `token:`
+#      below to a fine-grained PAT or GitHub App token with contents +
+#      pull-requests write, or (b) close and reopen the PR manually.
 
 name: Sync API Types
 
@@ -62,6 +68,7 @@ jobs:
       - name: Open PR when the contract changed
         uses: peter-evans/create-pull-request@v7
         with:
+          # token: ${{ secrets.CHOWBEA_PR_TOKEN }}  # see note below
           branch: chowbea/sync
           commit-message: "chore(api): sync API types from stable endpoint"
           title: "chore(api): sync API types"

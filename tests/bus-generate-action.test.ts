@@ -167,3 +167,41 @@ describe("executeGenerate: pinned bus manifest ([bus].file)", () => {
 		}
 	});
 });
+
+/**
+ * Regression coverage for finding 2 (pinned-mode UX fix wave): a pinned
+ * config's spec_file is a committed artifact only `sync` writes. Before the
+ * fix, a missing pinned spec surfaced SpecNotFoundError's default hint
+ * ("run 'chowbea-axios fetch'"), which loops forever since fetch never
+ * writes spec_file. It must point at `sync` instead.
+ */
+describe("executeGenerate: pinned spec not found (finding 2)", () => {
+	it("pinned config with no local spec file on disk rejects with a 'run sync' hint, not 'fetch'", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+		});
+		try {
+			const config = {
+				...DEFAULT_CONFIG,
+				api_endpoint: "https://staging.example.invalid/openapi.json",
+				spec_file: "./openapi.json",
+				output: { folder: "api" },
+			};
+			writeFileSync(join(dir, "api.config.toml"), generateConfigTemplate(config), "utf8");
+
+			await inDir(dir, async () => {
+				let caught: unknown;
+				try {
+					await executeGenerate(generateOptions, SILENT_LOGGER);
+				} catch (error) {
+					caught = error;
+				}
+				expect(caught).toBeInstanceOf(Error);
+				expect((caught as Error).message).toMatch(/run `chowbea-axios sync`/);
+				expect((caught as Error).message).not.toMatch(/fetch/i);
+			});
+		} finally {
+			cleanup();
+		}
+	});
+});

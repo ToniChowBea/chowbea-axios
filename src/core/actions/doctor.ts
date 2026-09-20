@@ -6,9 +6,11 @@
  * and hash change on every fetch) is machine state that must never be
  * committed. `init` gitignores it, but projects created before that feature —
  * or that never ran `init` — commit it and then fight constant, meaningless
- * merge conflicts. `doctor` reports those tracked artifacts and, with `--fix`,
- * untracks them (`git rm --cached`, keeping the files on disk) and ensures the
- * ignore rule is present.
+ * merge conflicts. In pinned-inputs mode, `_generated/` is the same kind of
+ * churn risk (it's deterministically regenerated from the pinned spec), so
+ * `doctor` scans it too when a pin is configured. `doctor` reports those
+ * tracked artifacts and, with `--fix`, untracks them (`git rm --cached`,
+ * keeping the files on disk) and ensures the ignore rule is present.
  */
 
 import path from "node:path";
@@ -38,7 +40,11 @@ export interface DoctorActionOptions {
 
 export interface DoctorResult {
 	isGitRepo: boolean;
-	/** Repo-relative paths under `_internal/` that are currently tracked. */
+	/**
+	 * Repo-relative paths that are currently tracked but shouldn't be:
+	 * always `_internal/`, plus `_generated/` too when pinned-inputs mode
+	 * is configured (see the module comment).
+	 */
 	trackedArtifacts: string[];
 	/** Whether `.gitignore` already ignores `_internal/`. */
 	hasIgnoreRule: boolean;
@@ -113,7 +119,7 @@ export async function executeDoctor(
 
 	if (trackedArtifacts.length > 0) {
 		logger.warn(
-			`${trackedArtifacts.length} cache artifact(s) under ${internalRel}/ are tracked in git — they churn on every regen and trigger merge conflicts.`,
+			`${trackedArtifacts.length} generated/cache artifact(s) are tracked in git — they churn on every regen and trigger merge conflicts.`,
 		);
 		for (const file of trackedArtifacts) {
 			logger.info(`  tracked: ${file}`);
