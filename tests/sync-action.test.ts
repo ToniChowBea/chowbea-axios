@@ -223,4 +223,55 @@ describe("executeSync", () => {
 			cleanup();
 		}
 	});
+
+	// Regression (PR #143 review): nested pin paths must not fail half-written —
+	// parent directories are created before either pin write.
+	it("creates parent directories for nested pin paths", async () => {
+		const base = await serveBackend(PETSTORE_SPEC, manifestJson);
+		const config = {
+			...DEFAULT_CONFIG,
+			api_endpoint: `${base}/openapi.json`,
+			spec_file: "pins/openapi.json",
+			output: { folder: "api" },
+			bus: { endpoint: `${base}/bus.json`, file: "pins/bus/chowbea.bus.json" },
+		};
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+			"api.config.toml": generateConfigTemplate(config),
+		});
+		try {
+			const result = await runSync(dir);
+			expect(result.specChanged).toBe(true);
+			expect(result.busChanged).toBe(true);
+			expect(existsSync(join(dir, "pins/openapi.json"))).toBe(true);
+			expect(existsSync(join(dir, "pins/bus/chowbea.bus.json"))).toBe(true);
+		} finally {
+			cleanup();
+		}
+	});
+
+	// Regression (PR #143 review): Basic Auth must never travel over cleartext
+	// HTTP to a non-loopback host — refuse before any request is made.
+	it("refuses Basic Auth over cleartext HTTP to a non-loopback host", async () => {
+		const config = {
+			...DEFAULT_CONFIG,
+			api_endpoint: "http://192.0.2.1/openapi.json", // TEST-NET, never reached — guard fires first
+			spec_file: "openapi.json",
+			output: { folder: "api" },
+		};
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+			"api.config.toml": `${generateConfigTemplate(config)}\n[fetch.auth]\ntype = "basic"\nusername = "$SYNC_TEST_USER"\npassword = "$SYNC_TEST_PASS"\n`,
+		});
+		process.env.SYNC_TEST_USER = "test-user";
+		process.env.SYNC_TEST_PASS = "test-basic-auth-placeholder";
+		try {
+			await expect(runSync(dir)).rejects.toThrow(/Basic Auth.*https/i);
+			expect(existsSync(join(dir, "openapi.json"))).toBe(false);
+		} finally {
+			delete process.env.SYNC_TEST_USER;
+			delete process.env.SYNC_TEST_PASS;
+			cleanup();
+		}
+	});
 });

@@ -8,12 +8,13 @@
  * cache fallback and no swallowed bus failure.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "../../adapters/logger-interface.js";
 import { ensureOutputFolders, getOutputPaths, isPinnedMode, loadConfig } from "../config.js";
 import {
+	assertAuthOverSecureTransport,
 	buildBasicAuthHeader,
 	computeHash,
 	fetchOpenApiSpec,
@@ -87,6 +88,11 @@ export async function executeSync(
 		config.fetch?.auth?.type === "basic"
 			? resolveBasicAuthNonInteractive(config.fetch.auth)
 			: undefined;
+	if (auth) {
+		// Credentials never travel over cleartext HTTP to a non-loopback host.
+		assertAuthOverSecureTransport(config.api_endpoint as string);
+		if (config.bus) assertAuthOverSecureTransport(config.bus.endpoint);
+	}
 
 	// --- Fetch + validate EVERYTHING before writing anything. ---
 
@@ -154,6 +160,16 @@ export async function executeSync(
 	}
 
 	// --- All fetched and validated: write the pins that changed. ---
+
+	// Create parent directories for BOTH pins before writing either — a
+	// nested `[bus].file` path failing mid-way must not leave only the spec
+	// pin updated.
+	if (specChanged) {
+		await mkdir(path.dirname(pinnedSpecPath), { recursive: true });
+	}
+	if (config.bus && busChanged && newManifest && pinnedBusPath) {
+		await mkdir(path.dirname(pinnedBusPath), { recursive: true });
+	}
 
 	if (specChanged) {
 		await writeFile(pinnedSpecPath, specResult.buffer);
