@@ -4,6 +4,17 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [3.0.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.7.1...v3.0.0) (2026-09-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* older CLI versions reject date-free manifests; upgrade producer and consumers together.
+
+### Added
+
+* pinned API inputs mode — sync command, local overlay, team CI/CD ([#143](https://github.com/ToniChowBea/chowbea-axios/issues/143)) ([a3402c3](https://github.com/ToniChowBea/chowbea-axios/commit/a3402c3d946f2cac5626d4691da889fa906ad730))
+
 ## [2.7.1](https://github.com/ToniChowBea/chowbea-axios/compare/v2.7.0...v2.7.1) (2026-08-21)
 
 
