@@ -241,3 +241,48 @@ describe("generateConfigTemplate: pinned mode + [bus]", () => {
 		expect(isPinnedMode(DEFAULT_CONFIG)).toBe(false);
 	});
 });
+
+describe("api.config.local.toml overlay", () => {
+	async function overlayFixture(committed: string, local?: string) {
+		const dir = join(tmpdir(), `chowbea-overlay-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "package.json"), "{}", "utf8");
+		await writeFile(join(dir, "api.config.toml"), committed, "utf8");
+		if (local !== undefined) await writeFile(join(dir, "api.config.local.toml"), local, "utf8");
+		return dir;
+	}
+	const COMMITTED = `api_endpoint = "https://staging.example.com/openapi.json"\nspec_file = "openapi.json"\npoll_interval_ms = 5000\n[output]\nfolder = "src/api"\n[bus]\nendpoint = "https://staging.example.com/bus.json"\nfile = "chowbea.bus.json"\n`;
+
+	it("merges field-level, local wins, nested tables merge per key", async () => {
+		const dir = await overlayFixture(COMMITTED, `api_endpoint = "https://tunnel.example/openapi.json"\n[bus]\nendpoint = "https://tunnel.example/bus.json"\n`);
+		const { config, localOverrides, localOverridePresent } = await loadConfig(join(dir, "api.config.toml"));
+		expect(config.api_endpoint).toBe("https://tunnel.example/openapi.json");
+		expect(config.bus).toEqual({ endpoint: "https://tunnel.example/bus.json", file: "chowbea.bus.json" }); // file kept from committed
+		expect(localOverridePresent).toBe(true);
+		expect(localOverrides.sort()).toEqual(["api_endpoint", "bus.endpoint"]);
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	it("localOverlay: false ignores the local file but still reports its presence", async () => {
+		const dir = await overlayFixture(COMMITTED, `api_endpoint = "https://tunnel.example/openapi.json"\n`);
+		const { config, localOverrides, localOverridePresent } = await loadConfig(join(dir, "api.config.toml"), { localOverlay: false });
+		expect(config.api_endpoint).toBe("https://staging.example.com/openapi.json");
+		expect(localOverrides).toEqual([]);
+		expect(localOverridePresent).toBe(true);
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	it("no local file → empty overrides, not present", async () => {
+		const dir = await overlayFixture(COMMITTED);
+		const { localOverrides, localOverridePresent } = await loadConfig(join(dir, "api.config.toml"));
+		expect(localOverrides).toEqual([]);
+		expect(localOverridePresent).toBe(false);
+		await rm(dir, { recursive: true, force: true });
+	});
+
+	it("a malformed local file fails loudly (never silently ignored)", async () => {
+		const dir = await overlayFixture(COMMITTED, `api_endpoint = not valid toml`);
+		await expect(loadConfig(join(dir, "api.config.toml"))).rejects.toThrow(/api\.config\.local\.toml/);
+		await rm(dir, { recursive: true, force: true });
+	});
+});

@@ -603,6 +603,47 @@ export interface LoadConfigOptions {
    * silently use a localhost endpoint. Issue #39.
    */
   autoCreate?: boolean;
+
+  /**
+   * Merge a sibling api.config.local.toml (gitignored, per-dev endpoints/
+   * auth) over the committed config. Defaults to true. `sync` passes false:
+   * the pinned files must only ever be produced from the committed truth.
+   */
+  localOverlay?: boolean;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Field-level merge, local wins; nested tables merge per key; scalars and
+ * arrays replace. `overridden` collects dotted leaf keys for visibility
+ * logging ("local overrides: api_endpoint, bus.endpoint").
+ */
+function mergeLocalConfig(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+  prefix: string,
+  overridden: string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const dotted = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(value) && isPlainObject(out[key])) {
+      out[key] = mergeLocalConfig(out[key] as Record<string, unknown>, value, dotted, overridden);
+    } else {
+      out[key] = value;
+      overridden.push(dotted);
+    }
+  }
+  return out;
+}
+
+function localConfigPath(configPath: string): string {
+  return configPath.endsWith(".toml")
+    ? `${configPath.slice(0, -5)}.local.toml`
+    : `${configPath}.local`;
 }
 
 /**
@@ -622,6 +663,8 @@ export async function loadConfig(
   projectRoot: string;
   configPath: string;
   wasCreated: boolean;
+  localOverrides: string[];
+  localOverridePresent: boolean;
 }> {
   // Find project root
   const projectRoot = await findProjectRoot();
@@ -645,6 +688,8 @@ export async function loadConfig(
       projectRoot,
       configPath: resolvedConfigPath,
       wasCreated: true,
+      localOverrides: [],
+      localOverridePresent: false,
     };
   }
 
@@ -652,13 +697,31 @@ export async function loadConfig(
   try {
     const content = await readFile(resolvedConfigPath, "utf8");
     const parsed = toml.parse(content);
-    const config = validateConfig(parsed);
+    const localPath = localConfigPath(resolvedConfigPath);
+    const localExists = await configExists(localPath);
+    const localOverrides: string[] = [];
+    let merged = parsed as Record<string, unknown>;
+    if (localExists && (options.localOverlay ?? true)) {
+      let localParsed: unknown;
+      try {
+        localParsed = toml.parse(await readFile(localPath, "utf8"));
+      } catch (error) {
+        throw new ConfigError(
+          `Failed to parse api.config.local.toml: ${error instanceof Error ? error.message : String(error)}`,
+          "Fix or delete the local override file.",
+        );
+      }
+      merged = mergeLocalConfig(merged, localParsed as Record<string, unknown>, "", localOverrides);
+    }
+    const config = validateConfig(merged);
 
     return {
       config,
       projectRoot,
       configPath: resolvedConfigPath,
       wasCreated: false,
+      localOverrides,
+      localOverridePresent: localExists,
     };
   } catch (error) {
     if (error instanceof ConfigValidationError) {

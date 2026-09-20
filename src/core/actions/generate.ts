@@ -76,9 +76,12 @@ export async function executeGenerate(
 
 	// Load configuration (auto-creates if missing)
 	logger.step("config", "Loading configuration...");
-	const { config, projectRoot, configPath, wasCreated } = await loadConfig(
+	const { config, projectRoot, configPath, wasCreated, localOverrides } = await loadConfig(
 		options.configPath,
 	);
+	if (localOverrides.length > 0) {
+		logger.info({ overrides: localOverrides }, "Using api.config.local.toml overrides");
+	}
 
 	if (wasCreated) {
 		logger.warn(

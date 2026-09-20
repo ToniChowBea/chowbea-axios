@@ -104,9 +104,12 @@ export async function executeWatch(
 	callbacks?: WatchCallbacks,
 ): Promise<void> {
 	// Load configuration first (auto-creates if missing)
-	const { config, projectRoot, configPath, wasCreated } = await loadConfig(
+	const { config, projectRoot, configPath, wasCreated, localOverrides } = await loadConfig(
 		options.configPath,
 	);
+	if (localOverrides.length > 0) {
+		logger.info({ overrides: localOverrides }, "Using api.config.local.toml overrides");
+	}
 
 	logger.header("chowbea-axios watch");
 	logger.debug("Configuration loaded successfully");
