@@ -17,6 +17,8 @@ import { executeFetch } from "../core/actions/fetch.js";
 import type { FetchActionOptions } from "../core/actions/fetch.js";
 import { executeGenerate } from "../core/actions/generate.js";
 import type { GenerateActionOptions } from "../core/actions/generate.js";
+import { executeSync } from "../core/actions/sync.js";
+import type { SyncActionOptions } from "../core/actions/sync.js";
 import { executeStatus } from "../core/actions/status.js";
 import {
 	executionSource,
@@ -46,6 +48,7 @@ import { DEFAULT_INSTANCE_CONFIG } from "../core/config.js";
 const COMMANDS = [
 	"fetch",
 	"generate",
+	"sync",
 	"status",
 	"diff",
 	"validate",
@@ -71,6 +74,7 @@ function printHelp(): void {
   ${"\x1b[1m"}COMMANDS${"\x1b[0m"}
     fetch        Fetch OpenAPI spec and generate types/operations
     generate     Generate types/operations from cached spec
+    sync         Update pinned API inputs (openapi.json, chowbea.bus.json) from the stable endpoint
     status       Show current status of config, cache, and generated files
     diff         Compare current vs new spec and show changes
     validate     Validate the OpenAPI spec
@@ -117,6 +121,18 @@ function printCommandHelp(command: CommandName): void {
     -n, --dry-run          Show what would be generated without writing
         --types-only       Generate only TypeScript types
         --operations-only  Generate only operations
+    -q, --quiet            Suppress non-error output
+    -v, --verbose          Show detailed output
+`,
+		sync: `
+  ${"\x1b[1m"}chowbea-axios sync${"\x1b[0m"} - Update the pinned API inputs from the stable endpoint
+
+  Reads ONLY the committed api.config.toml (api.config.local.toml is
+  ignored), fetches the spec and type-bus manifest, writes the pinned
+  files when their content changed, and regenerates types from them.
+
+  ${"\x1b[1m"}FLAGS${"\x1b[0m"}
+    -c, --config <path>    Path to api.config.toml
     -q, --quiet            Suppress non-error output
     -v, --verbose          Show detailed output
 `,
@@ -331,6 +347,29 @@ async function handleGenerate(args: string[]): Promise<void> {
 
 	try {
 		await executeGenerate(options, logger);
+	} catch (error) {
+		logger.error(formatError(error));
+		process.exitCode = 1;
+	}
+}
+
+async function handleSync(args: string[]): Promise<void> {
+	const { values } = parseArgs({
+		args,
+		options: {
+			config: { type: "string", short: "c" },
+			quiet: { type: "boolean", short: "q", default: false },
+			verbose: { type: "boolean", short: "v", default: false },
+		},
+		strict: true,
+	});
+
+	const level = getLogLevel({ quiet: values.quiet, verbose: values.verbose });
+	const logger = createLogger({ level });
+	const options: SyncActionOptions = { configPath: values.config };
+
+	try {
+		await executeSync(options, logger);
 	} catch (error) {
 		logger.error(formatError(error));
 		process.exitCode = 1;
@@ -864,6 +903,9 @@ export async function runHeadless(
 			break;
 		case "generate":
 			await handleGenerate(commandArgs);
+			break;
+		case "sync":
+			await handleSync(commandArgs);
 			break;
 		case "status":
 			await handleStatus(commandArgs);
