@@ -20,7 +20,6 @@ const manifest = buildManifest(
 		"exams/grade": [entry("Grade", `export type Grade = "A" | "B";`, "src/exams/grade.chowbea.ts")],
 		"_marked/billing": [entry("Plan", "export interface Plan { name: string }", "src/billing/plans.ts")],
 	},
-	new Date(0),
 );
 
 describe("bus emission", () => {
@@ -36,9 +35,8 @@ describe("bus emission", () => {
 	it("emits no volatile fields (no timestamps, counts, or manifest hash)", () => {
 		const files = renderBusFiles(manifest);
 		for (const content of Object.values(files)) {
-			expect(content).not.toContain(manifest.generatedAt);
 			expect(content).not.toContain(manifest.hash);
-			expect(content).not.toMatch(/Total|count:/i);
+			expect(content).not.toMatch(/Total|count:|\d{4}-\d{2}-\d{2}T/i);
 		}
 	});
 
@@ -55,7 +53,6 @@ describe("bus emission", () => {
 			// Second write from a manifest missing one barrel must remove its file.
 			const smaller = buildManifest(
 				{ "exams/grade": manifest.barrels["exams/grade"] },
-				new Date(0),
 			);
 			await writeBusFiles(smaller, busDir);
 			expect(readdirSync(busDir).sort()).toEqual(["exams.grade.ts", "index.ts"]);
@@ -74,7 +71,6 @@ describe("bus emission", () => {
 			{
 				"index": [entry("Type1", "export type Type1 = string;", "src/foo.chowbea.ts")],
 			},
-			new Date(0),
 		);
 		expect(() => renderBusFiles(colliding)).toThrow(/filename collision.*index\.ts/);
 		expect(() => renderBusFiles(colliding)).toThrow(/reserved/);
@@ -86,7 +82,6 @@ describe("bus emission", () => {
 				"v1.2/foo": [entry("A", "export type A = 1;", "src/a.chowbea.ts")],
 				"v1/2/foo": [entry("B", "export type B = 2;", "src/b.chowbea.ts")],
 			},
-			new Date(0),
 		);
 		expect(() => renderBusFiles(colliding)).toThrow(/filename collision.*v1\.2\.foo\.ts/);
 		expect(() => renderBusFiles(colliding)).toThrow(/v1\.2\/foo.*v1\/2\/foo/);

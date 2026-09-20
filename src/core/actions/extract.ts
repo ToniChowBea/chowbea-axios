@@ -140,8 +140,8 @@ export async function executeExtract(
 		const outPath = path.resolve(cwd, options.out ?? "chowbea.bus.json");
 
 		// Skip the write when the extracted content matches what is already on
-		// disk. `manifest.hash` covers the barrels only — not `generatedAt` — so
-		// it is stable across runs of unchanged source, mirroring the spec-side
+		// disk. The manifest carries no volatile fields, so `manifest.hash` is
+		// stable across runs of unchanged source, mirroring the spec-side
 		// cache. Without this, every watch cycle rewrote an identical file.
 		if ((await readExistingHash(outPath)) === manifest!.hash) {
 			logger.info(`Type bus unchanged — ${typeCount} type(s).`);

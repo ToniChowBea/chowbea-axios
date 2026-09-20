@@ -20,7 +20,6 @@ export interface BusTypeEntry {
 
 export interface BusManifest {
 	chowbeaBus: string;
-	generatedAt: string;
 	hash: string;
 	barrels: Record<string, BusTypeEntry[]>;
 }
@@ -47,10 +46,15 @@ export function hashBarrels(barrels: BusManifest["barrels"]): string {
 	return hashText(JSON.stringify(canonical));
 }
 
-export function buildManifest(barrels: BusManifest["barrels"], now: Date): BusManifest {
+/**
+ * Deliberately carries no timestamp: the manifest is a committed artifact,
+ * and volatile fields churn diffs and merge-conflict between branches. The
+ * content hash alone identifies a build (same rule as the generated .ts
+ * files, which carry a static header).
+ */
+export function buildManifest(barrels: BusManifest["barrels"]): BusManifest {
 	return {
 		chowbeaBus: BUS_VERSION,
-		generatedAt: now.toISOString(),
 		hash: hashBarrels(barrels),
 		barrels,
 	};
@@ -191,9 +195,8 @@ export function parseManifest(json: string): BusManifest {
 	if (typeof raw.hash !== "string" || typeof raw.barrels !== "object" || raw.barrels === null) {
 		throw new Error("Malformed chowbea bus manifest: missing hash or barrels");
 	}
-	if (typeof raw.generatedAt !== "string") {
-		throw new Error("Malformed chowbea bus manifest: generatedAt must be a string");
-	}
+	// Legacy manifests (< 2.8) carry a generatedAt timestamp — tolerated as an
+	// unknown extra field, no longer required or written.
 	for (const [key, entries] of Object.entries(raw.barrels)) {
 		if (!isSafeBarrelKey(key)) {
 			throw new Error(`Malformed chowbea bus manifest: unsafe barrel key "${key}"`);

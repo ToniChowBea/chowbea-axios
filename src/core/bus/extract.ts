@@ -477,9 +477,8 @@ export function extractBusTypes(options: { projectRoot: string; tsconfigPath?: s
 export function extractBusManifest(options: {
 	projectRoot: string;
 	tsconfigPath?: string;
-	now?: Date;
 }): { manifest: BusManifest | null; errors: ExtractError[] } {
 	const { barrels, errors } = extractBusTypes(options);
 	if (errors.length > 0) return { manifest: null, errors };
-	return { manifest: buildManifest(barrels, options.now ?? new Date()), errors };
+	return { manifest: buildManifest(barrels), errors };
 }

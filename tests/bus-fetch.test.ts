@@ -40,7 +40,7 @@ describe("syncBus", () => {
 	it("first sync fetches, caches, and emits", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			const endpoint = await serve(manifest);
 			const busCachePath = join(dir, "_internal", "chowbea.bus.json");
 			const busDir = join(dir, "_generated", "bus");
@@ -56,7 +56,7 @@ describe("syncBus", () => {
 	it("unchanged hash skips emission; changed manifest diffs against cache", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const v1 = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const v1 = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			const busCachePath = join(dir, "cache.json");
 			const busDir = join(dir, "bus");
 			const first = await syncBus({ endpoint: await serve(v1), busCachePath, busDir, logger: SILENT_LOGGER });
@@ -69,7 +69,6 @@ describe("syncBus", () => {
 
 			const v2 = buildManifest(
 				{ core: [entry("A", "export type A = 2;"), entry("B", "export type B = 1;")] },
-				new Date(0),
 			);
 			const changed = await syncBus({ endpoint: await serve(v2), busCachePath, busDir, logger: SILENT_LOGGER });
 			expect(changed.fetched).toBe(true);
@@ -82,7 +81,7 @@ describe("syncBus", () => {
 	it("a cached manifest that fails the (new) structural validation is treated as no cache — first sync, not a crash", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			const endpoint = await serve(manifest);
 			const busCachePath = join(dir, "_internal", "chowbea.bus.json");
 			const busDir = join(dir, "_generated", "bus");
@@ -109,7 +108,7 @@ describe("syncBus", () => {
 	it("unknown manifest version fails loud with the upgrade message", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const endpoint = await serve({ chowbeaBus: "99", hash: "x", barrels: {}, generatedAt: "" });
+			const endpoint = await serve({ chowbeaBus: "99", hash: "x", barrels: {} });
 			await expect(
 				syncBus({
 					endpoint,
@@ -131,7 +130,6 @@ describe("syncBus", () => {
 					"v1.2/foo": [entry("A", "export type A = 1;")],
 					"v1/2/foo": [entry("B", "export type B = 2;")],
 				},
-				new Date(0),
 			);
 			const endpoint = await serve(colliding);
 			const busCachePath = join(dir, "cache.json");
@@ -156,7 +154,7 @@ describe("syncBus", () => {
 	it("forwards a Basic Auth Authorization header to the bus endpoint ([fetch.auth] applies to bus fetches too)", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			let capturedAuth: string | undefined;
 			const endpoint = await serve(manifest, (headers) => {
 				capturedAuth = headers["authorization"] as string | undefined;
@@ -201,7 +199,7 @@ describe("syncBusFromConfig", () => {
 	it("resolvedAuth sends the expected Authorization header without any [fetch.auth] env vars set", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			let capturedAuth: string | undefined;
 			const endpoint = await serve(manifest, (headers) => {
 				capturedAuth = headers["authorization"] as string | undefined;
@@ -239,7 +237,7 @@ describe("syncBusFromConfig", () => {
 	it("runs a real sync against [bus].endpoint when configured — shared by fetch and watch", async () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+			const manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 			const endpoint = await serve(manifest);
 			const config = { ...DEFAULT_CONFIG, bus: { endpoint } };
 			const outputPaths = getOutputPaths(config, dir);

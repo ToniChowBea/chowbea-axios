@@ -37,7 +37,7 @@ describe("chowbea-axios/api", () => {
 	it("readBusManifest loads and validates the artifact", () => {
 		const { dir, cleanup } = makeBusFixture({});
 		try {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			writeFileSync(join(dir, "chowbea.bus.json"), JSON.stringify(manifest));
 			expect(readBusManifest(join(dir, "chowbea.bus.json"))).toEqual(manifest);
 		} finally {
@@ -46,7 +46,7 @@ describe("chowbea-axios/api", () => {
 	});
 
 	it("busHandler serves JSON with the manifest hash as ETag", () => {
-		const manifest = buildManifest({}, new Date(0));
+		const manifest = buildManifest({});
 		const res = mockRes();
 		busHandler(manifest)({ headers: {} }, res);
 		expect(res.statusCode).toBe(200);
@@ -56,7 +56,7 @@ describe("chowbea-axios/api", () => {
 	});
 
 	it("busHandler answers 304 to a matching If-None-Match", () => {
-		const manifest = buildManifest({}, new Date(0));
+		const manifest = buildManifest({});
 		const res = mockRes();
 		busHandler(manifest)({ headers: { "if-none-match": `"${manifest.hash}"` } }, res);
 		expect(res.statusCode).toBe(304);
@@ -69,7 +69,7 @@ describe("chowbea-axios/api", () => {
 	// their own ETag header.
 	describe("busHandler: conditional ETag completeness (finding F1)", () => {
 		it("304 response carries the etag header", () => {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			const res = mockRes();
 			busHandler(manifest)({ headers: { "if-none-match": `"${manifest.hash}"` } }, res);
 			expect(res.statusCode).toBe(304);
@@ -77,28 +77,28 @@ describe("chowbea-axios/api", () => {
 		});
 
 		it('a weak-tagged If-None-Match (W/"<hash>") matches and answers 304', () => {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			const res = mockRes();
 			busHandler(manifest)({ headers: { "if-none-match": `W/"${manifest.hash}"` } }, res);
 			expect(res.statusCode).toBe(304);
 		});
 
 		it('a comma-separated list containing the etag ("other", "<hash>") matches and answers 304', () => {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			const res = mockRes();
 			busHandler(manifest)({ headers: { "if-none-match": `"other", "${manifest.hash}"` } }, res);
 			expect(res.statusCode).toBe(304);
 		});
 
 		it("a wildcard If-None-Match (*) always matches and answers 304", () => {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			const res = mockRes();
 			busHandler(manifest)({ headers: { "if-none-match": "*" } }, res);
 			expect(res.statusCode).toBe(304);
 		});
 
 		it("a non-matching list answers 200 with the body and etag", () => {
-			const manifest = buildManifest({}, new Date(0));
+			const manifest = buildManifest({});
 			const res = mockRes();
 			busHandler(manifest)({ headers: { "if-none-match": `"other", "another"` } }, res);
 			expect(res.statusCode).toBe(200);
@@ -112,7 +112,7 @@ describe("chowbea-axios/api", () => {
 			const { dir, cleanup } = makeBusFixture({});
 			try {
 				const manifestPath = join(dir, "chowbea.bus.json");
-				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				writeFileSync(manifestPath, JSON.stringify(manifest));
 
 				const handler = busHandler(manifestPath);
@@ -131,7 +131,7 @@ describe("chowbea-axios/api", () => {
 			const { dir, cleanup } = makeBusFixture({});
 			try {
 				const manifestPath = join(dir, "chowbea.bus.json");
-				const first = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const first = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				writeFileSync(manifestPath, JSON.stringify(first));
 
 				const handler = busHandler(manifestPath);
@@ -139,7 +139,7 @@ describe("chowbea-axios/api", () => {
 				handler({ headers: {} }, res1);
 				expect(res1.headers.etag).toBe(`"${first.hash}"`);
 
-				const second = buildManifest({ two: [entry("B", "export type B = 2;")] }, new Date(1000));
+				const second = buildManifest({ two: [entry("B", "export type B = 2;")] });
 				writeFileSync(manifestPath, JSON.stringify(second));
 				bumpMtime(manifestPath);
 
@@ -158,7 +158,7 @@ describe("chowbea-axios/api", () => {
 			const { dir, cleanup } = makeBusFixture({});
 			try {
 				const manifestPath = join(dir, "chowbea.bus.json");
-				const good = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const good = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				writeFileSync(manifestPath, JSON.stringify(good));
 
 				const handler = busHandler(manifestPath);
@@ -178,7 +178,7 @@ describe("chowbea-axios/api", () => {
 				expect(JSON.parse(res2.body)).toEqual(good);
 
 				// Retry: mtime wasn't advanced on failure, so this bump is what lets it pick up the fix.
-				const recovered = buildManifest({ two: [entry("B", "export type B = 2;")] }, new Date(2000));
+				const recovered = buildManifest({ two: [entry("B", "export type B = 2;")] });
 				writeFileSync(manifestPath, JSON.stringify(recovered));
 				bumpMtime(manifestPath);
 
@@ -204,7 +204,7 @@ describe("chowbea-axios/api", () => {
 				expect(res1.headers["content-type"]).toBe("text/plain");
 				expect(res1.body).toBe("chowbea bus manifest unavailable — run chowbea-axios extract");
 
-				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				writeFileSync(manifestPath, JSON.stringify(manifest));
 
 				const res2 = mockRes();
@@ -220,7 +220,7 @@ describe("chowbea-axios/api", () => {
 			const { dir, cleanup } = makeBusFixture({});
 			try {
 				const manifestPath = join(dir, "chowbea.bus.json");
-				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const manifest = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				writeFileSync(manifestPath, JSON.stringify(manifest));
 
 				const handler = busHandler(manifestPath);

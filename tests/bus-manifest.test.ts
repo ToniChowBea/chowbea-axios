@@ -31,15 +31,17 @@ describe("bus manifest", () => {
 		expect(hashBarrels(a)).toBe(hashBarrels(b));
 	});
 
-	it("buildManifest stamps version, timestamp, and hash", () => {
-		const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date("2026-08-14T00:00:00Z"));
+	it("buildManifest stamps version and hash, and no volatile fields", () => {
+		const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 		expect(m.chowbeaBus).toBe(BUS_VERSION);
-		expect(m.generatedAt).toBe("2026-08-14T00:00:00.000Z");
 		expect(m.hash).toBe(hashBarrels(m.barrels));
+		// The manifest is a committed artifact — identical input must serialize
+		// byte-identically across runs (no timestamps).
+		expect(JSON.stringify(m)).toBe(JSON.stringify(buildManifest({ one: [entry("A", "export type A = 1;")] })));
 	});
 
 	it("parseManifest round-trips and rejects unknown versions", () => {
-		const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+		const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 		expect(parseManifest(JSON.stringify(m))).toEqual(m);
 		const wrong = JSON.stringify({ ...m, chowbeaBus: "99" });
 		expect(() => parseManifest(wrong)).toThrow(BusVersionError);
@@ -52,20 +54,20 @@ describe("bus manifest", () => {
 	// is the trust boundary every fetched manifest passes through.
 	describe("parseManifest: structural validation of untrusted input", () => {
 		it("rejects a barrel key that could path-traverse out of busDir", () => {
-			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 			const evil = JSON.stringify({ ...m, barrels: { "..\\evil": m.barrels.one } });
 			expect(() => parseManifest(evil)).toThrow(/unsafe barrel key/i);
 			expect(() => parseManifest(evil)).toThrow(/\.\.\\evil/);
 		});
 
 		it("rejects a barrel key with a `..` path segment", () => {
-			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 			const evil = JSON.stringify({ ...m, barrels: { "foo/../../evil": m.barrels.one } });
 			expect(() => parseManifest(evil)).toThrow(/unsafe barrel key/i);
 		});
 
 		it("rejects an entry with a non-string declaration instead of silently emitting `undefined`", () => {
-			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 			const bad = JSON.stringify({
 				...m,
 				barrels: { one: [{ ...m.barrels.one[0], declaration: 12345 }] },
@@ -75,7 +77,7 @@ describe("bus manifest", () => {
 		});
 
 		it("rejects an entry with an invalid kind", () => {
-			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 			const bad = JSON.stringify({
 				...m,
 				barrels: { one: [{ ...m.barrels.one[0], kind: "class" }] },
@@ -84,7 +86,7 @@ describe("bus manifest", () => {
 		});
 
 		it("rejects an entry with a non-number line", () => {
-			const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+			const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 			const bad = JSON.stringify({
 				...m,
 				barrels: { one: [{ ...m.barrels.one[0], line: "1" }] },
@@ -112,7 +114,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).toThrow(/does not match its declared kind/);
 			});
@@ -132,7 +133,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).toThrow(
 					/declares name "Other" but the entry is named "A"/,
@@ -154,7 +154,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).toThrow(
 					/enum member initializers must be a string or numeric literal/,
@@ -176,7 +175,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).not.toThrow();
 			});
@@ -202,7 +200,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).toThrow(
 					/enum member names must be a plain identifier or string literal/,
@@ -224,7 +221,6 @@ describe("bus manifest", () => {
 							},
 						],
 					},
-					new Date(0),
 				);
 				expect(() => parseManifest(JSON.stringify(m))).not.toThrow();
 			});
@@ -233,20 +229,20 @@ describe("bus manifest", () => {
 		// Finding A2: a stale hash otherwise masks real declaration/barrel
 		// changes and poisons the If-None-Match / hash-compare cache-skip.
 		describe("hash integrity (A2)", () => {
-			it("rejects a manifest missing generatedAt", () => {
-				const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
-				const { generatedAt: _generatedAt, ...rest } = m;
-				expect(() => parseManifest(JSON.stringify(rest))).toThrow(/generatedAt/);
+			it("accepts a legacy manifest that still carries a generatedAt timestamp", () => {
+				const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
+				const legacy = JSON.stringify({ ...m, generatedAt: "2026-08-14T00:00:00.000Z" });
+				expect(() => parseManifest(legacy)).not.toThrow();
 			});
 
 			it("rejects a manifest whose top-level hash doesn't match its barrels content", () => {
-				const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				const stale = JSON.stringify({ ...m, hash: "0".repeat(64) });
 				expect(() => parseManifest(stale)).toThrow(/hash does not match barrels content/);
 			});
 
 			it("rejects an entry whose own hash doesn't match its declaration, even when the (unaffected) root hash still matches", () => {
-				const m = buildManifest({ one: [entry("A", "export type A = 1;")] }, new Date(0));
+				const m = buildManifest({ one: [entry("A", "export type A = 1;")] });
 				// hashBarrels' canonical projection is [name, kind, declaration,
 				// source, line] — it never includes entry.hash — so tampering with
 				// only entry.hash leaves the root hash unchanged. Only the
@@ -265,7 +261,6 @@ describe("bus manifest", () => {
 					"exams/grade": [entry("Grade", "export type Grade = 1;"), entry("Id", "export type Id = string;")],
 					_marked: [{ ...entry("Plan", "export interface Plan {}"), kind: "interface" as const }],
 				},
-				new Date(0),
 			);
 			expect(parseManifest(JSON.stringify(m))).toEqual(m);
 		});
@@ -274,11 +269,9 @@ describe("bus manifest", () => {
 	it("diffManifests reports added/removed/changed by type name", () => {
 		const base = buildManifest(
 			{ one: [entry("A", "export type A = 1;"), entry("B", "export type B = 2;")] },
-			new Date(0),
 		);
 		const next = buildManifest(
 			{ one: [entry("A", "export type A = 111;"), entry("C", "export type C = 3;")] },
-			new Date(0),
 		);
 		expect(diffManifests(base, next)).toEqual({ added: ["C"], removed: ["B"], changed: ["A"] });
 	});

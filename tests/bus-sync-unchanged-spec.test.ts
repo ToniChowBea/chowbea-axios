@@ -80,7 +80,7 @@ const fetchOptions = { force: false, dryRun: false, typesOnly: false, operations
 
 describe("bus sync survives an unchanged spec (finding B0)", () => {
 	it("executeFetch re-emits bus files on a spec-unchanged run when the bus manifest changed", async () => {
-		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 		const busEndpoint = await serveDynamic(() => manifest);
 		const repo = makeTempGitRepo();
 		try {
@@ -93,7 +93,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 			);
 
 			// The bus manifest changes; the local spec file (and its cached hash) do not.
-			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] }, new Date(0));
+			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] });
 
 			// Second run: spec is unchanged. Pre-fix, executeFetch returned before
 			// ever calling syncBusFromConfig, so bus/core.ts would still read "= 1".
@@ -108,7 +108,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 	});
 
 	it("watch's runCycle re-emits bus files on a no-changes cycle when the bus manifest changed", async () => {
-		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 		const busEndpoint = await serveDynamic(() => manifest);
 		const repo = makeTempGitRepo();
 		try {
@@ -121,7 +121,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 				"export type A = 1;",
 			);
 
-			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] }, new Date(0));
+			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] });
 
 			// Abort right after the first cycle completes so the test doesn't wait
 			// on the poll interval.
