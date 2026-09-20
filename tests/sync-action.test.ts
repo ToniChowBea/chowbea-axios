@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { executeSync } from "../src/core/actions/sync.js";
 import { buildManifest, hashText } from "../src/core/bus/manifest.js";
 import { DEFAULT_CONFIG, generateConfigTemplate, getOutputPaths } from "../src/core/config.js";
+import { buildBasicAuthHeader } from "../src/core/fetcher.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
 
@@ -25,6 +26,25 @@ function serveBackend(spec: string, manifestJson: string, seenBusHeaders: Record
 			if (req.url === "/openapi.json") { res.writeHead(200, { "content-type": "application/json" }); res.end(spec); return; }
 			if (req.url === "/bus.json") {
 				seenBusHeaders.push(req.headers);
+				res.writeHead(200, { "content-type": "application/json" }); res.end(manifestJson); return;
+			}
+			res.writeHead(404); res.end();
+		});
+		servers.push(server);
+		server.listen(0, "127.0.0.1", () => {
+			const addr = server.address() as { port: number };
+			resolve(`http://127.0.0.1:${addr.port}`);
+		});
+	});
+}
+
+/** Like serveBackend, but /bus.json replies 304 (no body) when If-None-Match matches the manifest's quoted hash. */
+function serveBackendConditionalBus(spec: string, manifest: { hash: string }, manifestJson: string): Promise<string> {
+	return new Promise((resolve) => {
+		const server = createServer((req, res) => {
+			if (req.url === "/openapi.json") { res.writeHead(200, { "content-type": "application/json" }); res.end(spec); return; }
+			if (req.url === "/bus.json") {
+				if (req.headers["if-none-match"] === `"${manifest.hash}"`) { res.writeHead(304); res.end(); return; }
 				res.writeHead(200, { "content-type": "application/json" }); res.end(manifestJson); return;
 			}
 			res.writeHead(404); res.end();
@@ -84,6 +104,9 @@ describe("executeSync", () => {
 			const paths = getOutputPaths(config, dir);
 			expect(readFileSync(join(paths.busDir, "core.ts"), "utf8")).toContain("Grade");
 			expect(existsSync(paths.operations)).toBe(true);
+			expect(result.typeCount).toBe(1);
+			expect(result.operationCount).toBeGreaterThan(0);
+			expect(result.busDiff).toBeNull();
 		} finally { cleanup(); }
 	});
 
@@ -150,5 +173,54 @@ describe("executeSync", () => {
 		try {
 			await expect(runSync(dir)).rejects.toThrow(/spec_file/);
 		} finally { cleanup(); }
+	});
+
+	it("a 304 from the bus endpoint counts as unchanged", async () => {
+		const base = await serveBackendConditionalBus(PETSTORE_SPEC, manifest, manifestJson);
+		const { dir, cleanup } = fixture(base);
+		try {
+			await runSync(dir);
+			const specBytes = readFileSync(join(dir, "openapi.json"));
+			const busBytes = readFileSync(join(dir, "chowbea.bus.json"));
+			const second = await runSync(dir);
+			expect(second.specChanged).toBe(false);
+			expect(second.busChanged).toBe(false);
+			expect(readFileSync(join(dir, "openapi.json"))).toEqual(specBytes);
+			expect(readFileSync(join(dir, "chowbea.bus.json"))).toEqual(busBytes);
+		} finally { cleanup(); }
+	});
+
+	it("refuses to pin from the cache fallback after network failure", async () => {
+		const base = await serveBackend(PETSTORE_SPEC, manifestJson);
+		const server = servers.at(-1)!;
+		const { dir, cleanup } = fixture(base);
+		try {
+			await runSync(dir); // populates the _internal spec + cache metadata
+			server.close();
+			server.closeAllConnections();
+			await expect(runSync(dir)).rejects.toThrow(/refusing to pin from the cache fallback/);
+		} finally { cleanup(); }
+	}, 10_000);
+
+	it("sends Basic Auth, not the explicit header, to the bus endpoint when [fetch.auth] is configured", async () => {
+		const seen: Record<string, string | string[] | undefined>[] = [];
+		const base = await serveBackend(PETSTORE_SPEC, manifestJson, seen);
+		const { dir, cleanup } = fixture(base);
+		process.env.SYNC_TEST_USER = "test-user";
+		process.env.SYNC_TEST_PASS = "test-basic-auth-placeholder";
+		try {
+			writeFileSync(
+				join(dir, "api.config.toml"),
+				`${readFileSync(join(dir, "api.config.toml"), "utf8")}\n[fetch.headers]\nAuthorization = "Bearer wrong"\n\n[fetch.auth]\ntype = "basic"\nusername = "$SYNC_TEST_USER"\npassword = "$SYNC_TEST_PASS"\n`,
+				"utf8",
+			);
+			await runSync(dir);
+			const expected = buildBasicAuthHeader({ username: "test-user", password: "test-basic-auth-placeholder" });
+			expect(seen[0]["authorization"]).toBe(expected);
+		} finally {
+			delete process.env.SYNC_TEST_USER;
+			delete process.env.SYNC_TEST_PASS;
+			cleanup();
+		}
 	});
 });
