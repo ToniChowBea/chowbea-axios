@@ -585,6 +585,32 @@ export function resolveSpecSource(
 }
 
 /**
+ * Spec source for the LIVE commands (`fetch`, `watch`), which mean "pull
+ * from a running backend": endpoints beat the pinned `spec_file`, inverting
+ * `resolveSpecSource` (used by the offline commands, where pins win).
+ * Behavior change note: configs that set BOTH api_endpoint and spec_file
+ * previously read the file on bare `fetch`; in pinned mode both are set and
+ * bare `fetch` must hit the endpoint (see 2026-09-20 design spec §4).
+ */
+export function resolveLiveSpecSource(
+  config: ApiConfig,
+  projectRoot: string,
+  flags?: { endpoint?: string; specFile?: string },
+): SpecSource {
+  if (flags?.endpoint) {
+    return { type: "remote", endpoint: flags.endpoint };
+  }
+  if (flags?.specFile) {
+    const p = path.isAbsolute(flags.specFile) ? flags.specFile : path.join(projectRoot, flags.specFile);
+    return { type: "local", path: p };
+  }
+  if (config.api_endpoint) {
+    return { type: "remote", endpoint: config.api_endpoint };
+  }
+  return resolveSpecSource(config, projectRoot, undefined);
+}
+
+/**
  * Pinned-inputs mode: both the stable endpoint (sync source) and the
  * committed spec path are configured. See the 2026-09-20 design spec.
  */

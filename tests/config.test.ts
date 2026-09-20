@@ -11,6 +11,7 @@ import {
 	getOutputPaths,
 	isPinnedMode,
 	loadConfig,
+	resolveLiveSpecSource,
 } from "../src/core/config.js";
 import { ConfigValidationError } from "../src/core/errors.js";
 
@@ -294,5 +295,18 @@ describe("api.config.local.toml overlay", () => {
 			expect(hint).toBe("Fix or delete the local override file.");
 		}
 		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe("resolveLiveSpecSource (fetch/watch: endpoints beat spec_file)", () => {
+	const pinned = { ...DEFAULT_CONFIG, api_endpoint: "https://staging.example.com/openapi.json", spec_file: "openapi.json" };
+	it("bare fetch on a pinned config resolves to the endpoint", () => {
+		expect(resolveLiveSpecSource(pinned, "/p")).toEqual({ type: "remote", endpoint: "https://staging.example.com/openapi.json" });
+	});
+	it("flag endpoint > flag specFile > config endpoint > config spec_file", () => {
+		expect(resolveLiveSpecSource(pinned, "/p", { endpoint: "http://localhost:3000/openapi.json", specFile: "x.json" }))
+			.toEqual({ type: "remote", endpoint: "http://localhost:3000/openapi.json" });
+		expect(resolveLiveSpecSource(pinned, "/p", { specFile: "x.json" })).toEqual({ type: "local", path: "/p/x.json" });
+		expect(resolveLiveSpecSource({ ...pinned, api_endpoint: undefined }, "/p")).toEqual({ type: "local", path: "/p/openapi.json" });
 	});
 });

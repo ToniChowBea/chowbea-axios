@@ -14,7 +14,7 @@ import {
 	ensureOutputFolders,
 	getOutputPaths,
 	loadConfig,
-	resolveSpecSource,
+	resolveLiveSpecSource,
 	type SpecSource,
 } from "../config.js";
 import {
@@ -138,9 +138,11 @@ export async function executeWatch(
 	// Load optional generator hooks once at startup; reused on every cycle.
 	const hooks = await loadHooks(projectRoot, logger);
 
-	// Determine polling interval and spec source (local file or remote endpoint)
+	// Determine polling interval and spec source (local file or remote
+	// endpoint). `watch` is a live command — endpoints beat a pinned
+	// spec_file, same rule as `fetch` (watch has no --spec-file flag to forward).
 	const intervalMs = options.intervalMs ?? config.poll_interval_ms;
-	const specSource = resolveSpecSource(config, projectRoot);
+	const specSource = resolveLiveSpecSource(config, projectRoot);
 	const sourceLabel =
 		specSource.type === "local" ? specSource.path : specSource.endpoint;
 

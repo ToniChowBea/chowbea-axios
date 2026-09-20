@@ -54,12 +54,20 @@ function serveDynamic(current: () => object): Promise<string> {
 	});
 }
 
-/** generateConfigTemplate() doesn't render [bus] — append it by hand. */
+/**
+ * generateConfigTemplate() doesn't render [bus] — append it by hand.
+ * api_endpoint is explicitly unset: these tests exercise the local-file
+ * fetch/watch path. Leaving DEFAULT_CONFIG's api_endpoint set here would
+ * make this a pinned (both-set) config, and live commands now prefer the
+ * endpoint over spec_file (resolveLiveSpecSource), sending fetch/watch at
+ * the unserved localhost:3000 default instead of this local openapi.json.
+ */
 function scaffold(repo: TempGitRepo, busEndpoint: string): void {
 	repo.write("package.json", JSON.stringify({ name: "consumer", version: "0.0.0" }));
 	repo.write("openapi.json", PETSTORE_SPEC);
 	const template = generateConfigTemplate({
 		...DEFAULT_CONFIG,
+		api_endpoint: undefined,
 		spec_file: "./openapi.json",
 		output: { folder: "api" },
 	});
