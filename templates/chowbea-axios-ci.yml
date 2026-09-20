@@ -64,6 +64,9 @@ jobs:
 # In the API repo's CI, add the extraction gate:
 #   - run: npx chowbea-axios extract --check
 #   - run: npx chowbea-axios extract --check --diff "$STAGING_BUS_URL" --fail-on-removed
+#
+# Prefer never committing generated code? See pinned-inputs mode:
+# `chowbea-axios init --pinned` scaffolds chowbea-pinned-ci.yml + chowbea-sync.yml instead.
 
       - name: Check for differences in generated code
         run: |
