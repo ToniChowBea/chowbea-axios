@@ -197,7 +197,7 @@ manual). See the comment header in `.github/workflows/chowbea-sync.yml`.
 **Migrating an existing project:**
 1. Add `spec_file = "openapi.json"` (keep `api_endpoint`) and `file = "chowbea.bus.json"` under `[bus]`.
 2. `npx chowbea-axios sync` — creates the pins.
-3. `git rm -r --cached src/api/_generated` and add `_generated/` + `api.config.local.toml` to `.gitignore` (`chowbea-axios doctor --fix` does both).
+3. `git rm -r --cached src/api/_generated` and add `_generated/` to `.gitignore` (`chowbea-axios doctor --fix` does both), then manually add `api.config.local.toml` to `.gitignore`.
 4. Copy `chowbea-sync.yml` + `chowbea-pinned-ci.yml` from this package's `templates/` into `.github/workflows/`, replacing the old staleness check.
 5. Optional hardening: a CODEOWNERS entry for the two pinned files.
 
