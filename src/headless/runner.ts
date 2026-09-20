@@ -182,6 +182,7 @@ function printCommandHelp(command: CommandName): void {
         --skip-concurrent    Skip concurrent script setup
         --skip-workflow      Skip GitHub Actions workflow setup
         --with-vite-plugins  Scaffold Vite codegen plugins (Surfaces & Side Panels)
+        --pinned             Pinned-inputs mode: commit openapi.json + chowbea.bus.json, gitignore _generated/
         --base-url-env <var> Environment variable for base URL
         --env-accessor <str> How to access env vars (e.g. "process.env")
         --token-key <key>    localStorage key for auth token
@@ -616,6 +617,7 @@ async function handleInit(args: string[]): Promise<void> {
 			"skip-concurrent": { type: "boolean", default: false },
 			"skip-workflow": { type: "boolean", default: false },
 			"with-vite-plugins": { type: "boolean", default: false },
+			pinned: { type: "boolean", default: false },
 			"base-url-env": {
 				type: "string",
 				default: DEFAULT_INSTANCE_CONFIG.base_url_env,
@@ -713,6 +715,7 @@ async function handleInit(args: string[]): Promise<void> {
 		specSource,
 		outputFolder: values["output-folder"],
 		packageManager: rawPm as InitActionOptions["packageManager"],
+		pinned: values.pinned ?? false,
 	};
 
 	// Surface a clearer error when running non-interactively without a

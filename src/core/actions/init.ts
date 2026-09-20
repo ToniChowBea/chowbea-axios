@@ -119,6 +119,8 @@ export interface InitActionOptions {
   outputFolder?: string;
   /** Package manager override (skips the prompt). Auto-detected when omitted. */
   packageManager?: PackageManager;
+  /** Pinned-inputs mode: commit openapi.json/chowbea.bus.json, gitignore _generated/. */
+  pinned?: boolean;
 }
 
 /** Structured result returned after a successful init. */
@@ -134,6 +136,8 @@ export interface InitResult {
   workflowCreated: boolean;
   surfacesScaffolded: boolean;
   sidepanelsScaffolded: boolean;
+  pinned: boolean;
+  initialSyncSuccess: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,9 +235,19 @@ async function setupConfig(
   instanceConfig: InstanceConfig,
   specSource: { kind: "remote"; endpoint: string } | { kind: "local"; specFile: string },
   outputFolder: string,
+  pinned: boolean,
   logger: Logger,
   prompts: PromptProvider,
 ): Promise<boolean> {
+  // Fail fast, before any side effects: pinning only makes sense for a
+  // remote endpoint — a local spec_file is already the checked-in file,
+  // there's nothing for `sync` to pin FROM.
+  if (pinned && specSource.kind === "local") {
+    throw new Error(
+      "--pinned requires a remote endpoint (--endpoint) — the pinned spec is synced FROM it",
+    );
+  }
+
   const configPath = getConfigPath(projectRoot);
   const exists = await configExists(configPath);
 
@@ -259,13 +273,21 @@ async function setupConfig(
     api_endpoint:
       specSource.kind === "remote" ? specSource.endpoint : undefined,
     spec_file:
-      specSource.kind === "local" ? specSource.specFile : undefined,
+      pinned ? "openapi.json" : specSource.kind === "local" ? specSource.specFile : undefined,
     poll_interval_ms: 10_000,
     output: { folder: outputFolder },
     instance: instanceConfig,
     watch: { debug: false },
   });
-  await writeFile(configPath, configContent, "utf8");
+
+  // Pinned mode also wants [bus] — but it's opt-in (not every API publishes
+  // a type-bus manifest), so ship it commented-out rather than guessing an
+  // endpoint.
+  const pinnedBusExample = pinned
+    ? `\n# Type Bus (optional) — uncomment and point at your API's manifest route:\n# [bus]\n# endpoint = "https://staging.example.com/.well-known/chowbea.json"\n# file = "chowbea.bus.json"\n`
+    : "";
+
+  await writeFile(configPath, configContent + pinnedBusExample, "utf8");
   logger.info({ path: configPath }, "Created api.config.toml");
   return true;
 }
@@ -889,19 +911,29 @@ export async function setupVitePlugins(
 // ---------------------------------------------------------------------------
 
 /**
- * Scaffold GitHub Actions workflow for validating generated code in PRs.
+ * Scaffold GitHub Actions workflow(s) for validating generated code in PRs.
+ * In pinned-inputs mode, also scaffolds the sync workflow that keeps the
+ * pinned inputs current from the stable endpoint.
  */
 async function setupWorkflow(
   projectRoot: string,
   force: boolean,
+  pinned: boolean,
+  nonInteractive: boolean,
   logger: Logger,
   prompts: PromptProvider,
 ): Promise<boolean> {
-  const wantsWorkflow = await prompts.confirm({
-    message:
-      "Add a GitHub Actions workflow to validate generated code in PRs?",
-    default: true,
-  });
+  // Non-interactive: the caller only invokes setupWorkflow when
+  // !options.skipWorkflow, so "wants a workflow" is already decided —
+  // never prompt (same guard pattern executeInit uses for its other
+  // prompts: skip straight to the non-interactive answer).
+  const wantsWorkflow = nonInteractive
+    ? true
+    : await prompts.confirm({
+        message:
+          "Add a GitHub Actions workflow to validate generated code in PRs?",
+        default: true,
+      });
 
   if (!wantsWorkflow) {
     logger.info("Skipped CI workflow setup");
@@ -909,55 +941,78 @@ async function setupWorkflow(
   }
 
   const workflowDir = path.join(projectRoot, ".github", "workflows");
-  const workflowPath = path.join(workflowDir, "chowbea-axios-ci.yml");
-
-  let exists = false;
-  try {
-    await access(workflowPath);
-    exists = true;
-  } catch {
-    /* not found */
-  }
-
-  if (exists && !force) {
-    const shouldOverwrite = await prompts.confirm({
-      message: "chowbea-axios-ci.yml already exists. Overwrite?",
-      default: false,
-    });
-    if (!shouldOverwrite) {
-      logger.info("Skipping workflow creation");
-      return false;
-    }
-  }
-
-  logger.step("workflow", "Creating GitHub Actions workflow...");
-
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
-  const templatePath = path.resolve(
-    thisDir,
-    "..",
-    "..",
-    "..",
-    "templates",
-    "chowbea-axios-ci.yml",
-  );
-  const template = await readFile(templatePath, "utf8");
+  const templateNames = pinned
+    ? ["chowbea-pinned-ci.yml", "chowbea-sync.yml"]
+    : ["chowbea-axios-ci.yml"];
 
   await mkdir(workflowDir, { recursive: true });
-  await writeFile(workflowPath, template, "utf8");
-  logger.info(`Created ${workflowPath}`);
-  logger.info(
-    "Set STAGING_API_ENDPOINT in your GitHub repository secrets",
-  );
 
-  return true;
+  let anyCreated = false;
+  for (const name of templateNames) {
+    const workflowPath = path.join(workflowDir, name);
+
+    let exists = false;
+    try {
+      await access(workflowPath);
+      exists = true;
+    } catch {
+      /* not found */
+    }
+
+    if (exists && !force) {
+      if (nonInteractive) {
+        logger.info(`Skipping ${name} (already exists)`);
+        continue;
+      }
+      const shouldOverwrite = await prompts.confirm({
+        message: `${name} already exists. Overwrite?`,
+        default: false,
+      });
+      if (!shouldOverwrite) {
+        logger.info(`Skipping ${name} (already exists)`);
+        continue;
+      }
+    }
+
+    logger.step("workflow", `Creating ${name}...`);
+
+    const templatePath = path.resolve(
+      thisDir,
+      "..",
+      "..",
+      "..",
+      "templates",
+      name,
+    );
+    const template = await readFile(templatePath, "utf8");
+
+    await writeFile(workflowPath, template, "utf8");
+    logger.info(`Created ${workflowPath}`);
+    anyCreated = true;
+  }
+
+  if (pinned) {
+    logger.info(
+      "Backend setup: fire repository_dispatch (event_type: chowbea-sync) after deploy — see the comment header in chowbea-sync.yml",
+    );
+  } else {
+    logger.info(
+      "Set STAGING_API_ENDPOINT in your GitHub repository secrets",
+    );
+  }
+
+  return anyCreated;
 }
 
 /**
  * Append chowbea-axios gitignore entries if not already present.
+ * In pinned-inputs mode, also gitignore the regenerated output folder and
+ * the per-dev local config overlay — only the pinned inputs are committed.
  */
 async function ensureGitignoreEntries(
   projectRoot: string,
+  pinned: boolean,
   logger: Logger,
 ): Promise<void> {
   const entry = "_internal/";
@@ -968,6 +1023,26 @@ async function ensureGitignoreEntries(
   );
   if (added) {
     logger.step("gitignore", `Added ${entry} to .gitignore`);
+  }
+
+  if (!pinned) return;
+
+  const generatedAdded = await ensureGitignoreEntry(
+    projectRoot,
+    "_generated/",
+    "# chowbea-axios generated output (pinned-inputs mode — regenerate with `chowbea-axios generate`)",
+  );
+  if (generatedAdded) {
+    logger.step("gitignore", "Added _generated/ to .gitignore");
+  }
+
+  const localConfigAdded = await ensureGitignoreEntry(
+    projectRoot,
+    "api.config.local.toml",
+    "# per-dev chowbea-axios overrides (endpoints, tunnels)",
+  );
+  if (localConfigAdded) {
+    logger.step("gitignore", "Added api.config.local.toml to .gitignore");
   }
 }
 
@@ -1019,6 +1094,8 @@ export async function executeInit(
         workflowCreated: false,
         surfacesScaffolded: false,
         sidepanelsScaffolded: false,
+        pinned: options.pinned ?? false,
+        initialSyncSuccess: null,
       };
     }
   }
@@ -1052,6 +1129,20 @@ export async function executeInit(
       ? { kind: "remote", endpoint: specInput.trim() }
       : { kind: "local", specFile: specInput.trim() };
   }
+
+  // Pin API inputs in git (team CI/CD mode)? Explicit --pinned always wins.
+  // Otherwise: never prompt in non-interactive mode, and don't ask at all
+  // for a local spec source (there's nothing to sync FROM, so pinning it
+  // would just be an error below in setupConfig).
+  const pinned =
+    options.pinned ??
+    (options.nonInteractive || specSource.kind !== "remote"
+      ? false
+      : await prompts.confirm({
+          message:
+            "Pin API inputs in git (team CI/CD mode: commit openapi.json, gitignore _generated/)?",
+          default: false,
+        }));
 
   // Prompt for output folder location (or use supplied/default in
   // non-interactive mode).
@@ -1143,6 +1234,7 @@ export async function executeInit(
     instanceConfig,
     specSource,
     outputFolder,
+    pinned,
     logger,
     prompts,
   );
@@ -1232,10 +1324,13 @@ export async function executeInit(
     }
   }
 
-  // Step 6: Ensure _internal/ is in .gitignore
-  await ensureGitignoreEntries(projectRoot, logger);
+  // Step 6: Ensure _internal/ (and, in pinned mode, _generated/ +
+  // api.config.local.toml) is in .gitignore
+  await ensureGitignoreEntries(projectRoot, pinned, logger);
 
-  // Step 7: Run initial fetch.
+  // Step 7: Run initial fetch/sync.
+  // - Pinned mode: always sync (regardless of localhost) — warn-and-continue
+  //   on failure so an unreachable endpoint never fails init outright.
   // - Local spec_file: always safe to read, always run.
   // - Remote localhost: skip (user's dev server may not be running yet).
   // - Remote non-localhost: run.
@@ -1244,7 +1339,20 @@ export async function executeInit(
     (specSource.endpoint.includes("localhost") ||
       specSource.endpoint.includes("127.0.0.1"));
   let initialFetchSuccess: boolean | null = null;
-  if (!isLocalhost) {
+  let initialSyncSuccess: boolean | null = null;
+  if (pinned) {
+    try {
+      const { executeSync } = await import("./sync.js");
+      await executeSync({ configPath: getConfigPath(projectRoot) }, logger);
+      initialSyncSuccess = true;
+    } catch (error) {
+      initialSyncSuccess = false;
+      logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        "First sync failed (endpoint unreachable?) — scaffold is complete; run `chowbea-axios sync` once the endpoint is up",
+      );
+    }
+  } else if (!isLocalhost) {
     initialFetchSuccess = await runInitialFetch(projectRoot, pm, logger);
   }
 
@@ -1254,6 +1362,8 @@ export async function executeInit(
     workflowCreated = await setupWorkflow(
       projectRoot,
       options.force,
+      pinned,
+      options.nonInteractive ?? false,
       logger,
       prompts,
     );
@@ -1283,5 +1393,7 @@ export async function executeInit(
     workflowCreated,
     surfacesScaffolded,
     sidepanelsScaffolded,
+    pinned,
+    initialSyncSuccess,
   };
 }
