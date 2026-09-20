@@ -38,6 +38,8 @@ export interface FetchConfig {
 export interface BusConfig {
   /** URL of the served chowbea.bus.json (conventionally /.well-known/chowbea.json). */
   endpoint: string;
+  /** Repo-relative path of the pinned (committed) manifest. Enables pinned mode for the bus. */
+  file?: string;
 }
 
 /**
@@ -159,13 +161,24 @@ function tomlEscape(value: string): string {
  */
 export function generateConfigTemplate(config: ApiConfig): string {
   // Emit whichever spec source is configured as the active line, and the
-  // other as a commented-out example.
+  // other as a commented-out example. In pinned mode (both set), emit both uncommented.
   const fallbackEndpoint = config.api_endpoint ?? "https://api.example.com/openapi.json";
-  const specSourceBlock = config.spec_file
-    ? `# api_endpoint = ${tomlEscape(fallbackEndpoint)}  # Use remote endpoint instead of local file
+  const specSourceBlock =
+    config.spec_file && config.api_endpoint
+      ? `api_endpoint = ${tomlEscape(config.api_endpoint)}
+spec_file = ${tomlEscape(config.spec_file)}  # pinned spec, committed — updated by \`chowbea-axios sync\``
+      : config.spec_file
+        ? `# api_endpoint = ${tomlEscape(fallbackEndpoint)}  # Use remote endpoint instead of local file
 spec_file = ${tomlEscape(config.spec_file)}`
-    : `api_endpoint = ${tomlEscape(config.api_endpoint ?? "")}
+        : `api_endpoint = ${tomlEscape(config.api_endpoint ?? "")}
 # spec_file = "./openapi.json"  # Use local file instead of remote`;
+
+  const busBlock = config.bus
+    ? `
+[bus]
+endpoint = ${tomlEscape(config.bus.endpoint)}${config.bus.file ? `\nfile = ${tomlEscape(config.bus.file)}` : ""}
+`
+    : "";
 
   return `# Chowbea Axios Configuration
 
@@ -174,7 +187,7 @@ poll_interval_ms = ${config.poll_interval_ms}
 
 [output]
 folder = ${tomlEscape(config.output.folder)}
-
+${busBlock}
 [instance]
 base_url_env = ${tomlEscape(config.instance.base_url_env)}
 env_accessor = ${tomlEscape(config.instance.env_accessor)}
@@ -515,7 +528,18 @@ function validateBusConfig(bus: unknown): BusConfig | undefined {
     );
   }
 
-  return { endpoint: busObj.endpoint };
+  let file: string | undefined;
+  if (busObj.file !== undefined) {
+    if (typeof busObj.file !== "string" || busObj.file.trim() === "") {
+      throw new ConfigValidationError(
+        "bus.file",
+        "bus.file must be a non-empty string path (the committed manifest, e.g. \"chowbea.bus.json\")"
+      );
+    }
+    file = busObj.file;
+  }
+
+  return file ? { endpoint: busObj.endpoint, file } : { endpoint: busObj.endpoint };
 }
 
 /**
@@ -561,6 +585,40 @@ export function resolveSpecSource(
 }
 
 /**
+ * Spec source for the LIVE commands (`fetch`, `watch`), which mean "pull
+ * from a running backend": endpoints beat the pinned `spec_file`, inverting
+ * `resolveSpecSource` (used by the offline commands, where pins win).
+ * Behavior change note: configs that set BOTH api_endpoint and spec_file
+ * previously read the file on bare `fetch`; in pinned mode both are set and
+ * bare `fetch` must hit the endpoint (see 2026-09-20 design spec §4).
+ */
+export function resolveLiveSpecSource(
+  config: ApiConfig,
+  projectRoot: string,
+  flags?: { endpoint?: string; specFile?: string },
+): SpecSource {
+  if (flags?.endpoint) {
+    return { type: "remote", endpoint: flags.endpoint };
+  }
+  if (flags?.specFile) {
+    const p = path.isAbsolute(flags.specFile) ? flags.specFile : path.join(projectRoot, flags.specFile);
+    return { type: "local", path: p };
+  }
+  if (config.api_endpoint) {
+    return { type: "remote", endpoint: config.api_endpoint };
+  }
+  return resolveSpecSource(config, projectRoot, undefined);
+}
+
+/**
+ * Pinned-inputs mode: both the stable endpoint (sync source) and the
+ * committed spec path are configured. See the 2026-09-20 design spec.
+ */
+export function isPinnedMode(config: ApiConfig): boolean {
+  return Boolean(config.api_endpoint && config.spec_file);
+}
+
+/**
  * Options for `loadConfig`.
  */
 export interface LoadConfigOptions {
@@ -571,6 +629,47 @@ export interface LoadConfigOptions {
    * silently use a localhost endpoint. Issue #39.
    */
   autoCreate?: boolean;
+
+  /**
+   * Merge a sibling api.config.local.toml (gitignored, per-dev endpoints/
+   * auth) over the committed config. Defaults to true. `sync` passes false:
+   * the pinned files must only ever be produced from the committed truth.
+   */
+  localOverlay?: boolean;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Field-level merge, local wins; nested tables merge per key; scalars and
+ * arrays replace. `overridden` collects dotted leaf keys for visibility
+ * logging ("local overrides: api_endpoint, bus.endpoint").
+ */
+function mergeLocalConfig(
+  base: Record<string, unknown>,
+  overlay: Record<string, unknown>,
+  prefix: string,
+  overridden: string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const dotted = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(value) && isPlainObject(out[key])) {
+      out[key] = mergeLocalConfig(out[key] as Record<string, unknown>, value, dotted, overridden);
+    } else {
+      out[key] = value;
+      overridden.push(dotted);
+    }
+  }
+  return out;
+}
+
+function localConfigPath(configPath: string): string {
+  return configPath.endsWith(".toml")
+    ? `${configPath.slice(0, -5)}.local.toml`
+    : `${configPath}.local`;
 }
 
 /**
@@ -590,6 +689,8 @@ export async function loadConfig(
   projectRoot: string;
   configPath: string;
   wasCreated: boolean;
+  localOverrides: string[];
+  localOverridePresent: boolean;
 }> {
   // Find project root
   const projectRoot = await findProjectRoot();
@@ -613,6 +714,8 @@ export async function loadConfig(
       projectRoot,
       configPath: resolvedConfigPath,
       wasCreated: true,
+      localOverrides: [],
+      localOverridePresent: false,
     };
   }
 
@@ -620,16 +723,34 @@ export async function loadConfig(
   try {
     const content = await readFile(resolvedConfigPath, "utf8");
     const parsed = toml.parse(content);
-    const config = validateConfig(parsed);
+    const localPath = localConfigPath(resolvedConfigPath);
+    const localExists = await configExists(localPath);
+    const localOverrides: string[] = [];
+    let merged = parsed as Record<string, unknown>;
+    if (localExists && (options.localOverlay ?? true)) {
+      let localParsed: unknown;
+      try {
+        localParsed = toml.parse(await readFile(localPath, "utf8"));
+      } catch (error) {
+        throw new ConfigError(
+          `Failed to parse api.config.local.toml: ${error instanceof Error ? error.message : String(error)}`,
+          "Fix or delete the local override file.",
+        );
+      }
+      merged = mergeLocalConfig(merged, localParsed as Record<string, unknown>, "", localOverrides);
+    }
+    const config = validateConfig(merged);
 
     return {
       config,
       projectRoot,
       configPath: resolvedConfigPath,
       wasCreated: false,
+      localOverrides,
+      localOverridePresent: localExists,
     };
   } catch (error) {
-    if (error instanceof ConfigValidationError) {
+    if (error instanceof ConfigValidationError || error instanceof ConfigError) {
       throw error;
     }
 

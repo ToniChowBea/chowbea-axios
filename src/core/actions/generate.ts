@@ -11,6 +11,7 @@ import { formatDuration } from "../../adapters/logger-interface.js";
 import {
 	ensureOutputFolders,
 	getOutputPaths,
+	isPinnedMode,
 	loadConfig,
 	resolveSpecSource,
 } from "../config.js";
@@ -76,9 +77,12 @@ export async function executeGenerate(
 
 	// Load configuration (auto-creates if missing)
 	logger.step("config", "Loading configuration...");
-	const { config, projectRoot, configPath, wasCreated } = await loadConfig(
+	const { config, projectRoot, configPath, wasCreated, localOverrides } = await loadConfig(
 		options.configPath,
 	);
+	if (localOverrides.length > 0) {
+		logger.info({ overrides: localOverrides }, "Using api.config.local.toml overrides");
+	}
 
 	if (wasCreated) {
 		logger.warn(
@@ -105,6 +109,21 @@ export async function executeGenerate(
 	// For local sources, copy into the cache location so the rest of the pipeline
 	// reads from a consistent place.
 	const specSource = resolveSpecSource(config, projectRoot, options.specFile);
+
+	// Pinned mode's spec_file is a committed artifact that only `sync` writes —
+	// pointing users at `fetch` (which never touches it) is a dead-end loop.
+	// Only rewrite the message when the CLI resolved the pin from config; an
+	// explicit --spec-file flag is the user's own ad hoc path, not the pin, so
+	// it keeps the default fetch hint.
+	const rewriteForPinnedMode = isPinnedMode(config) && !options.specFile;
+	function specNotFound(specPath: string): Error {
+		return rewriteForPinnedMode
+			? new Error(
+					`pinned spec not found at ${specPath} — run \`chowbea-axios sync\` to create it`,
+				)
+			: new SpecNotFoundError(specPath);
+	}
+
 	if (specSource.type === "local") {
 		logger.info(
 			{ specFile: specSource.path },
@@ -112,7 +131,13 @@ export async function executeGenerate(
 		);
 
 		// Load and validate the spec
-		const { buffer } = await loadLocalSpec(specSource.path);
+		let buffer: Buffer;
+		try {
+			({ buffer } = await loadLocalSpec(specSource.path));
+		} catch (error) {
+			if (error instanceof SpecNotFoundError) throw specNotFound(specSource.path);
+			throw error;
+		}
 		const hash = computeHash(buffer);
 
 		// Copy to cache location
@@ -133,7 +158,7 @@ export async function executeGenerate(
 	const specExists = await hasLocalSpec(outputPaths.spec);
 
 	if (!specExists) {
-		throw new SpecNotFoundError(outputPaths.spec);
+		throw specNotFound(outputPaths.spec);
 	}
 
 	// Generate client files if they don't exist
@@ -207,25 +232,45 @@ export async function executeGenerate(
 
 	if (config.bus) {
 		const { readFile } = await import("node:fs/promises");
+		const path = await import("node:path");
 		const { parseManifest } = await import("../bus/manifest.js");
 		const { writeBusFiles } = await import("../bus/emit.js");
 
-		// Only an absent cache file is the expected "never ran fetch" case —
-		// swallow that one as a warning. A cache file that exists but fails to
-		// parse/validate, or an emission failure (e.g. filename collision),
-		// is a real problem and must fail generate loudly, same as any other
-		// failure in this action (e.g. SpecNotFoundError above).
-		let cached: string | null = null;
-		try {
-			cached = await readFile(outputPaths.busCache, "utf8");
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			logger.warn("Type bus configured but no cached manifest — run fetch first");
-		}
-		if (cached !== null) {
-			const manifest = parseManifest(cached);
+		if (config.bus.file) {
+			// Pinned mode: the committed manifest is the source of truth; the
+			// _internal cache is not consulted. parseManifest is the trust
+			// boundary — a tampered pinned file fails its hash check here.
+			const pinnedPath = path.resolve(projectRoot, config.bus.file);
+			let pinned: string;
+			try {
+				pinned = await readFile(pinnedPath, "utf8");
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+				throw new Error(
+					`pinned bus manifest not found at ${pinnedPath} — run \`chowbea-axios sync\` to create it`,
+				);
+			}
+			const manifest = parseManifest(pinned);
 			await writeBusFiles(manifest, outputPaths.busDir);
-			logger.info("Type bus: regenerated from cache");
+			logger.info("Type bus: regenerated from pinned manifest");
+		} else {
+			// Only an absent cache file is the expected "never ran fetch" case —
+			// swallow that one as a warning. A cache file that exists but fails to
+			// parse/validate, or an emission failure (e.g. filename collision),
+			// is a real problem and must fail generate loudly, same as any other
+			// failure in this action (e.g. SpecNotFoundError above).
+			let cached: string | null = null;
+			try {
+				cached = await readFile(outputPaths.busCache, "utf8");
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+				logger.warn("Type bus configured but no cached manifest — run fetch first");
+			}
+			if (cached !== null) {
+				const manifest = parseManifest(cached);
+				await writeBusFiles(manifest, outputPaths.busDir);
+				logger.info("Type bus: regenerated from cache");
+			}
 		}
 	}
 

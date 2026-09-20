@@ -1,0 +1,89 @@
+# Keeps the pinned API inputs (openapi.json + chowbea.bus.json) in sync
+# with the stable endpoint, opening a PR when the backend published a new
+# contract. Pairs with pinned-inputs mode (spec_file + [bus].file set).
+#
+# Setup:
+#   1. The BACKEND repo's deploy workflow fires the doorbell AFTER a
+#      successful deploy (on push the endpoint still serves the old
+#      contract):
+#
+#        - name: Notify client repos of new API contract
+#          env:
+#            GH_TOKEN: ${{ secrets.CHOWBEA_SYNC_TOKEN }}  # fine-grained PAT (contents: write on the client repos) or GitHub App token
+#          run: |
+#            for repo in ${{ vars.CHOWBEA_CLIENT_REPOS }}; do   # e.g. "org/web org/mobile"
+#              gh api "repos/${repo}/dispatches" -f event_type=chowbea-sync
+#            done
+#
+#   2. If your endpoints need auth, uncomment the env block below and add
+#      the env vars referenced in [fetch.auth] as repository secrets.
+#
+#   3. PRs opened with the default GITHUB_TOKEN can't trigger other
+#      workflows (GitHub's anti-recursion rule), so the pinned CI check
+#      will NOT run on the sync PR unless you either (a) set `token:`
+#      below to a fine-grained PAT or GitHub App token with contents +
+#      pull-requests write, or (b) close and reopen the PR manually.
+#
+#   4. Ensure chowbea-axios is a devDependency so the `npx` below resolves
+#      the repository-pinned version from node_modules, not the registry.
+
+name: Sync API Types
+
+on:
+  repository_dispatch:
+    types: [chowbea-sync]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *" # daily safety net for a missed dispatch
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize runs; never cancel one mid-PR-update.
+concurrency:
+  group: chowbea-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Don't leave the workflow token in .git/config while npm ci runs
+          # arbitrary postinstall scripts. create-pull-request authenticates
+          # with its own `token` input, so it doesn't need persisted creds.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync pinned API inputs from the stable endpoint
+        run: npx chowbea-axios sync
+        # env:
+        #   SWAGGER_USER: ${{ secrets.SWAGGER_USER }}
+        #   SWAGGER_PASS: ${{ secrets.SWAGGER_PASS }}
+
+      - name: Open PR when the contract changed
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # token: ${{ secrets.CHOWBEA_PR_TOKEN }}  # see note below
+          branch: chowbea/sync
+          commit-message: "chore(api): sync API types from stable endpoint"
+          title: "chore(api): sync API types"
+          body: |
+            The backend published a new API contract. This PR updates the
+            pinned inputs (`openapi.json`, `chowbea.bus.json`); CI
+            regenerates types from them and typechecks the app before merge.
+
+            After checking out this branch locally, run
+            `npx chowbea-axios generate` to refresh `_generated/`.

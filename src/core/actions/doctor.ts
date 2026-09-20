@@ -6,15 +6,17 @@
  * and hash change on every fetch) is machine state that must never be
  * committed. `init` gitignores it, but projects created before that feature —
  * or that never ran `init` — commit it and then fight constant, meaningless
- * merge conflicts. `doctor` reports those tracked artifacts and, with `--fix`,
- * untracks them (`git rm --cached`, keeping the files on disk) and ensures the
- * ignore rule is present.
+ * merge conflicts. In pinned-inputs mode, `_generated/` is the same kind of
+ * churn risk (it's deterministically regenerated from the pinned spec), so
+ * `doctor` scans it too when a pin is configured. `doctor` reports those
+ * tracked artifacts and, with `--fix`, untracks them (`git rm --cached`,
+ * keeping the files on disk) and ensures the ignore rule is present.
  */
 
 import path from "node:path";
 
 import type { Logger } from "../../adapters/logger-interface.js";
-import { getOutputPaths, loadConfig } from "../config.js";
+import { getOutputPaths, isPinnedMode, loadConfig } from "../config.js";
 import {
 	isGitRepo,
 	listTrackedFiles,
@@ -26,6 +28,9 @@ import { ensureGitignoreEntry, isGitignored } from "./env-manager.js";
 const INTERNAL_IGNORE_ENTRY = "_internal/";
 const INTERNAL_IGNORE_COMMENT =
 	"# chowbea-axios cache (timestamps, downloaded specs)";
+const GENERATED_IGNORE_ENTRY = "_generated/";
+const GENERATED_IGNORE_COMMENT =
+	"# chowbea-axios generated output (pinned-inputs mode — regenerate with `chowbea-axios generate`)";
 
 export interface DoctorActionOptions {
 	configPath?: string;
@@ -35,7 +40,11 @@ export interface DoctorActionOptions {
 
 export interface DoctorResult {
 	isGitRepo: boolean;
-	/** Repo-relative paths under `_internal/` that are currently tracked. */
+	/**
+	 * Repo-relative paths that are currently tracked but shouldn't be:
+	 * always `_internal/`, plus `_generated/` too when pinned-inputs mode
+	 * is configured (see the module comment).
+	 */
 	trackedArtifacts: string[];
 	/** Whether `.gitignore` already ignores `_internal/`. */
 	hasIgnoreRule: boolean;
@@ -76,8 +85,27 @@ export async function executeDoctor(
 		.relative(projectRoot, paths.internal)
 		.split(path.sep)
 		.join("/");
-	const trackedArtifacts = listTrackedFiles(projectRoot, internalRel);
-	const hasIgnoreRule = await isGitignored(projectRoot, INTERNAL_IGNORE_ENTRY);
+	const generatedRel = path
+		.relative(projectRoot, paths.generated)
+		.split(path.sep)
+		.join("/");
+	const trackedInternal = listTrackedFiles(projectRoot, internalRel);
+	const trackedArtifacts = [...trackedInternal];
+	// Pinned mode's committed spec regenerates `_generated/` deterministically —
+	// tracking it churns on every regen just like `_internal/`. Non-pinned
+	// setups legitimately commit `_generated/` (no pinned spec to regenerate
+	// from in CI), so this scan only runs in pinned mode.
+	let trackedGenerated: string[] = [];
+	if (isPinnedMode(config)) {
+		trackedGenerated = listTrackedFiles(projectRoot, generatedRel);
+		trackedArtifacts.push(...trackedGenerated);
+	}
+	const hasInternalRule = await isGitignored(projectRoot, INTERNAL_IGNORE_ENTRY);
+	// Pinned mode requires the `_generated/` rule too — vacuously satisfied
+	// otherwise (non-pinned setups legitimately commit `_generated/`).
+	const hasGeneratedRule =
+		!isPinnedMode(config) || (await isGitignored(projectRoot, GENERATED_IGNORE_ENTRY));
+	const hasIgnoreRule = hasInternalRule && hasGeneratedRule;
 
 	if (trackedArtifacts.length === 0 && hasIgnoreRule) {
 		logger.done(
@@ -96,15 +124,19 @@ export async function executeDoctor(
 
 	if (trackedArtifacts.length > 0) {
 		logger.warn(
-			`${trackedArtifacts.length} cache artifact(s) under ${internalRel}/ are tracked in git — they churn on every regen and trigger merge conflicts.`,
+			`${trackedArtifacts.length} generated/cache artifact(s) are tracked in git — they churn on every regen and trigger merge conflicts.`,
 		);
 		for (const file of trackedArtifacts) {
 			logger.info(`  tracked: ${file}`);
 		}
 	}
 	if (!hasIgnoreRule) {
+		const missing = [
+			...(!hasInternalRule ? [INTERNAL_IGNORE_ENTRY] : []),
+			...(!hasGeneratedRule ? [GENERATED_IGNORE_ENTRY] : []),
+		];
 		logger.warn(
-			`No '${INTERNAL_IGNORE_ENTRY}' rule in .gitignore — the cache may get re-committed.`,
+			`Missing .gitignore rule(s): ${missing.map((m) => `'${m}'`).join(", ")} — regenerable output may get re-committed.`,
 		);
 	}
 
@@ -124,7 +156,7 @@ export async function executeDoctor(
 	}
 
 	let ignoreRuleAdded = false;
-	if (!hasIgnoreRule) {
+	if (!hasInternalRule) {
 		ignoreRuleAdded = await ensureGitignoreEntry(
 			projectRoot,
 			INTERNAL_IGNORE_ENTRY,
@@ -134,15 +166,39 @@ export async function executeDoctor(
 			logger.step("gitignore", `Added ${INTERNAL_IGNORE_ENTRY} to .gitignore`);
 		}
 	}
+	if (isPinnedMode(config)) {
+		const generatedIgnoreAdded = await ensureGitignoreEntry(
+			projectRoot,
+			GENERATED_IGNORE_ENTRY,
+			GENERATED_IGNORE_COMMENT,
+		);
+		if (generatedIgnoreAdded) {
+			logger.step("gitignore", `Added ${GENERATED_IGNORE_ENTRY} to .gitignore`);
+			ignoreRuleAdded = true;
+		}
+	}
 
 	let untracked: string[] = [];
 	if (trackedArtifacts.length > 0) {
-		removeFromIndex(projectRoot, [internalRel]);
+		// `git rm --cached` errors on a pathspec matching nothing, so only pass
+		// the folders that actually have tracked entries (a pinned repo may
+		// have tracked `_generated/` files with a clean `_internal/`, or vice
+		// versa).
+		const pathspecs = [
+			...(trackedInternal.length > 0 ? [internalRel] : []),
+			...(trackedGenerated.length > 0 ? [generatedRel] : []),
+		];
+		removeFromIndex(projectRoot, pathspecs);
 		untracked = trackedArtifacts;
-		logger.step("git", `Untracked ${internalRel}/ (files kept on disk)`);
-		if (ignoreRuleAdded) {
-			stageFiles(projectRoot, [".gitignore"]);
-		}
+		logger.step(
+			"git",
+			`Untracked ${pathspecs.map((p) => `${p}/`).join(", ")} (files kept on disk)`,
+		);
+	}
+	// Stage the .gitignore repair even when nothing was tracked — a pinned
+	// repo can be missing only the `_generated/` rule.
+	if (ignoreRuleAdded) {
+		stageFiles(projectRoot, [".gitignore"]);
 	}
 
 	logger.done("Repaired. Commit the staged changes to finish.");

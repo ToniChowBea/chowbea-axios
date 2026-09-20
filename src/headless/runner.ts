@@ -17,6 +17,8 @@ import { executeFetch } from "../core/actions/fetch.js";
 import type { FetchActionOptions } from "../core/actions/fetch.js";
 import { executeGenerate } from "../core/actions/generate.js";
 import type { GenerateActionOptions } from "../core/actions/generate.js";
+import { executeSync } from "../core/actions/sync.js";
+import type { SyncActionOptions } from "../core/actions/sync.js";
 import { executeStatus } from "../core/actions/status.js";
 import {
 	executionSource,
@@ -46,6 +48,7 @@ import { DEFAULT_INSTANCE_CONFIG } from "../core/config.js";
 const COMMANDS = [
 	"fetch",
 	"generate",
+	"sync",
 	"status",
 	"diff",
 	"validate",
@@ -71,6 +74,7 @@ function printHelp(): void {
   ${"\x1b[1m"}COMMANDS${"\x1b[0m"}
     fetch        Fetch OpenAPI spec and generate types/operations
     generate     Generate types/operations from cached spec
+    sync         Update pinned API inputs (openapi.json, chowbea.bus.json) from the stable endpoint
     status       Show current status of config, cache, and generated files
     diff         Compare current vs new spec and show changes
     validate     Validate the OpenAPI spec
@@ -120,6 +124,18 @@ function printCommandHelp(command: CommandName): void {
     -q, --quiet            Suppress non-error output
     -v, --verbose          Show detailed output
 `,
+		sync: `
+  ${"\x1b[1m"}chowbea-axios sync${"\x1b[0m"} - Update the pinned API inputs from the stable endpoint
+
+  Reads ONLY the committed api.config.toml (api.config.local.toml is
+  ignored), fetches the spec and type-bus manifest, writes the pinned
+  files when their content changed, and regenerates types from them.
+
+  ${"\x1b[1m"}FLAGS${"\x1b[0m"}
+    -c, --config <path>    Path to api.config.toml
+    -q, --quiet            Suppress non-error output
+    -v, --verbose          Show detailed output
+`,
 		status: `
   ${"\x1b[1m"}chowbea-axios status${"\x1b[0m"} - Show current status
 
@@ -166,6 +182,7 @@ function printCommandHelp(command: CommandName): void {
         --skip-concurrent    Skip concurrent script setup
         --skip-workflow      Skip GitHub Actions workflow setup
         --with-vite-plugins  Scaffold Vite codegen plugins (Surfaces & Side Panels)
+        --pinned             Pinned-inputs mode: commit openapi.json + chowbea.bus.json, gitignore _generated/
         --base-url-env <var> Environment variable for base URL
         --env-accessor <str> How to access env vars (e.g. "process.env")
         --token-key <key>    localStorage key for auth token
@@ -331,6 +348,29 @@ async function handleGenerate(args: string[]): Promise<void> {
 
 	try {
 		await executeGenerate(options, logger);
+	} catch (error) {
+		logger.error(formatError(error));
+		process.exitCode = 1;
+	}
+}
+
+async function handleSync(args: string[]): Promise<void> {
+	const { values } = parseArgs({
+		args,
+		options: {
+			config: { type: "string", short: "c" },
+			quiet: { type: "boolean", short: "q", default: false },
+			verbose: { type: "boolean", short: "v", default: false },
+		},
+		strict: true,
+	});
+
+	const level = getLogLevel({ quiet: values.quiet, verbose: values.verbose });
+	const logger = createLogger({ level });
+	const options: SyncActionOptions = { configPath: values.config };
+
+	try {
+		await executeSync(options, logger);
 	} catch (error) {
 		logger.error(formatError(error));
 		process.exitCode = 1;
@@ -577,6 +617,11 @@ async function handleInit(args: string[]): Promise<void> {
 			"skip-concurrent": { type: "boolean", default: false },
 			"skip-workflow": { type: "boolean", default: false },
 			"with-vite-plugins": { type: "boolean", default: false },
+			// No `default` — stays `undefined` when the flag is absent so
+			// executeInit's `options.pinned ?? (...)` can tell "not passed"
+			// apart from "explicitly declined" and fall through to its own
+			// non-interactive/remote-source-gated confirm prompt.
+			pinned: { type: "boolean" },
 			"base-url-env": {
 				type: "string",
 				default: DEFAULT_INSTANCE_CONFIG.base_url_env,
@@ -674,6 +719,8 @@ async function handleInit(args: string[]): Promise<void> {
 		specSource,
 		outputFolder: values["output-folder"],
 		packageManager: rawPm as InitActionOptions["packageManager"],
+		// Forward raw (undefined when absent) — see the parseArgs comment above.
+		pinned: values.pinned,
 	};
 
 	// Surface a clearer error when running non-interactively without a
@@ -864,6 +911,9 @@ export async function runHeadless(
 			break;
 		case "generate":
 			await handleGenerate(commandArgs);
+			break;
+		case "sync":
+			await handleSync(commandArgs);
 			break;
 		case "status":
 			await handleStatus(commandArgs);

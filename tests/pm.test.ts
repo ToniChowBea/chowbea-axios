@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { detectPackageManager, resolveCommand } from "../src/core/pm.js";
+import { commandExists, detectPackageManager, resolveCommand } from "../src/core/pm.js";
 
 async function withFixture<T>(
 	files: string[],
@@ -68,6 +68,16 @@ describe("detectPackageManager (#24)", () => {
 				expect(await detectPackageManager(root)).toBe("pnpm");
 			},
 		);
+	});
+});
+
+describe("commandExists", () => {
+	// Regression: on Windows Node >= 20.12, spawning a `.cmd` shim without a
+	// shell fails with EINVAL, so probing `npm.cmd --version` reported every
+	// package manager as missing. The where/which probe works on all platforms.
+	it("finds a command that is on PATH and rejects one that is not", () => {
+		expect(commandExists("node")).toBe(true);
+		expect(commandExists("definitely-not-a-real-command-4471")).toBe(false);
 	});
 });
 

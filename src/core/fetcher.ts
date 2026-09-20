@@ -212,6 +212,31 @@ export function computeHash(buffer: Buffer): string {
 	return createHash("sha256").update(buffer).digest("hex");
 }
 
+/** Hosts where cleartext HTTP with credentials is acceptable (local dev). */
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Refuses to let Basic Auth credentials travel over cleartext HTTP to a
+ * non-loopback host (CWE-319). Plain `http:` stays allowed for loopback
+ * dev endpoints — the repo's deliberate localhost-friendly posture — and
+ * for unauthenticated requests. Call only when credentials are attached.
+ * Malformed URLs are ignored here; `validateEndpointUrl` owns that error.
+ */
+export function assertAuthOverSecureTransport(endpoint: string): void {
+	let url: URL;
+	try {
+		url = new URL(endpoint);
+	} catch {
+		return;
+	}
+	if (url.protocol === "http:" && !LOOPBACK_HOSTS.has(url.hostname)) {
+		throw new Error(
+			`Refusing to send Basic Auth credentials over cleartext HTTP to ${url.hostname} — ` +
+				`use an https:// endpoint (plain http is allowed only for loopback dev endpoints).`,
+		);
+	}
+}
+
 /**
  * Delays execution for the specified milliseconds.
  */

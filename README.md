@@ -93,6 +93,7 @@ src/api/
 | `init` | Interactive setup — creates config and base files |
 | `fetch` | Fetch spec from endpoint (or local file) and generate types |
 | `generate` | Generate from cached/local spec |
+| `sync` | Update pinned API inputs (openapi.json, chowbea.bus.json) from the stable endpoint |
 | `watch` | Watch for spec changes and auto-regenerate (with backoff on failures) |
 | `status` | Show current config, cache, and generated-file status |
 | `validate` | Validate your OpenAPI spec — 7 categories, severity-classified |
@@ -155,6 +156,55 @@ chowbea-axios init --non-interactive \
   --package-manager npm
 ```
 
+## Team CI/CD — Pinned Inputs (recommended for teams)
+
+Commit the *inputs* (`openapi.json` + `chowbea.bus.json`), gitignore all
+generated output. The pins are a lockfile for your API contract: builds are
+offline and reproducible, and backend changes reach the frontend as
+reviewable PRs — never from a dev's local backend.
+
+```toml
+api_endpoint = "https://staging.example.com/openapi.json"  # stable endpoint (sync source)
+spec_file    = "openapi.json"                              # pinned spec, committed
+
+[bus]
+endpoint = "https://staging.example.com/.well-known/chowbea.json"
+file     = "chowbea.bus.json"                              # pinned manifest, committed
+```
+
+- `generate` — offline: pinned files → `_generated/` (gitignored). What CI runs on every PR.
+- `fetch [--endpoint URL]` — dev loop: any live backend → gitignored caches + `_generated/`. Never touches the pins.
+- `sync` — the only pin writer: stable endpoint → validate → write pins on change → regenerate. Run by CI.
+
+**Per-dev endpoints** (ports, tunnels): create a gitignored
+`api.config.local.toml` next to the committed config — field-level override,
+local wins. `sync` deliberately ignores it.
+
+```toml
+# api.config.local.toml
+api_endpoint = "https://my-tunnel.ngrok.app/openapi.json"
+[bus]
+endpoint = "https://my-tunnel.ngrok.app/.well-known/chowbea.json"
+```
+
+**Backend → frontend doorbell:** the backend's deploy workflow fires
+`repository_dispatch` (event `chowbea-sync`) at each client repo *after a
+successful deploy*; the scaffolded `chowbea-sync.yml` workflow runs `sync`
+and opens a PR only when the contract changed (dispatch + daily cron +
+manual). See the comment header in `.github/workflows/chowbea-sync.yml`.
+For the sync PR's own CI checks to run, set the `token:` input in
+`chowbea-sync.yml` to a PAT or GitHub App token — the default
+`GITHUB_TOKEN` cannot trigger workflows.
+
+**New project:** `chowbea-axios init --pinned --non-interactive --endpoint https://staging.example.com/openapi.json --output-folder src/api --package-manager npm`
+
+**Migrating an existing project:**
+1. Add `spec_file = "openapi.json"` (keep `api_endpoint`) and `file = "chowbea.bus.json"` under `[bus]`.
+2. `npx chowbea-axios sync` — creates the pins.
+3. `git rm -r --cached src/api/_generated` and add `_generated/` to `.gitignore` (`chowbea-axios doctor --fix` does both), then manually add `api.config.local.toml` to `.gitignore`.
+4. Copy `chowbea-sync.yml` + `chowbea-pinned-ci.yml` from this package's `templates/` into `.github/workflows/`, replacing the old staleness check.
+5. Optional hardening: a CODEOWNERS entry for the two pinned files.
+
 ## Vite Plugins (optional)
 
 `chowbea-axios/vite` exposes two codegen plugins for Vite projects:
@@ -189,9 +239,10 @@ app.use(DEFAULT_API_ROUTE, busHandler());
 ```toml
 [bus]
 endpoint = "https://your-api.com/.well-known/chowbea.json"
+file     = "chowbea.bus.json"                              # optional: pin the manifest
 ```
 
-`fetch`/`watch` sync the bus alongside the spec: cache to `_internal/chowbea.bus.json`, emit `_generated/bus/`. `[fetch.auth]` and `[fetch.headers]` both apply to bus requests too.
+`fetch`/`watch` sync the bus alongside the spec: cache to `_internal/chowbea.bus.json`, emit `_generated/bus/`. `[fetch.auth]` and `[fetch.headers]` both apply to bus requests too. For team environments with pinned inputs and CI/CD workflows, see **Team CI/CD — Pinned Inputs** above.
 
 **CI:** API repo runs `extract --check` (invalid exports fail the build) and `extract --check --diff <baseline> --fail-on-removed` (blocks breaking removals). Frontend repo needs no extra step — the staleness check above already covers `_generated/bus/**`.
 

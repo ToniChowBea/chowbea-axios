@@ -321,7 +321,7 @@ describe("extractBusManifest: fidelity + assembly", () => {
 		].join("\n");
 		const { dir, cleanup } = makeBusFixture({ "src/bus.chowbea.ts": `${decls}\n` });
 		try {
-			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir });
 			expect(errors).toEqual([]);
 			const byName = Object.fromEntries(
 				Object.values(manifest!.barrels).flat().map((e) => [e.name, e.declaration]),
@@ -355,7 +355,7 @@ describe("extractBusManifest: fidelity + assembly", () => {
 			"src/billing/plans.ts": `/** @chowbea-export */\nexport interface Plan { name: string }\n`,
 		});
 		try {
-			const { manifest } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			const { manifest } = extractBusManifest({ projectRoot: dir });
 			expect(manifest).toMatchSnapshot();
 		} finally {
 			cleanup();
@@ -383,7 +383,7 @@ describe("chowbea-name: explicit destination file names", () => {
 			"src/exams/grade.chowbea.ts": `/** chowbea-name "grades" */\nexport type Grade = "A";\n`,
 		});
 		try {
-			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir });
 			expect(errors).toEqual([]);
 			expect(Object.keys(renderBusFiles(manifest!)).sort()).toEqual(["grades.ts", "index.ts"]);
 		} finally {
@@ -433,7 +433,7 @@ describe("chowbea-name: explicit destination file names", () => {
 			"src/bus.chowbea.ts": `/** chowbea-name "domain/grades" */\nexport type A = 1;\n`,
 		});
 		try {
-			const { manifest, errors } = extractBusManifest({ projectRoot: dir, now: new Date(0) });
+			const { manifest, errors } = extractBusManifest({ projectRoot: dir });
 			expect(errors).toEqual([]);
 			expect(Object.keys(renderBusFiles(manifest!))).toContain("domain.grades.ts");
 		} finally {

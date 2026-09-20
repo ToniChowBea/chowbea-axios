@@ -54,12 +54,20 @@ function serveDynamic(current: () => object): Promise<string> {
 	});
 }
 
-/** generateConfigTemplate() doesn't render [bus] — append it by hand. */
+/**
+ * generateConfigTemplate() doesn't render [bus] — append it by hand.
+ * api_endpoint is explicitly unset: these tests exercise the local-file
+ * fetch/watch path. Leaving DEFAULT_CONFIG's api_endpoint set here would
+ * make this a pinned (both-set) config, and live commands now prefer the
+ * endpoint over spec_file (resolveLiveSpecSource), sending fetch/watch at
+ * the unserved localhost:3000 default instead of this local openapi.json.
+ */
 function scaffold(repo: TempGitRepo, busEndpoint: string): void {
 	repo.write("package.json", JSON.stringify({ name: "consumer", version: "0.0.0" }));
 	repo.write("openapi.json", PETSTORE_SPEC);
 	const template = generateConfigTemplate({
 		...DEFAULT_CONFIG,
+		api_endpoint: undefined,
 		spec_file: "./openapi.json",
 		output: { folder: "api" },
 	});
@@ -80,7 +88,7 @@ const fetchOptions = { force: false, dryRun: false, typesOnly: false, operations
 
 describe("bus sync survives an unchanged spec (finding B0)", () => {
 	it("executeFetch re-emits bus files on a spec-unchanged run when the bus manifest changed", async () => {
-		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 		const busEndpoint = await serveDynamic(() => manifest);
 		const repo = makeTempGitRepo();
 		try {
@@ -93,7 +101,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 			);
 
 			// The bus manifest changes; the local spec file (and its cached hash) do not.
-			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] }, new Date(0));
+			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] });
 
 			// Second run: spec is unchanged. Pre-fix, executeFetch returned before
 			// ever calling syncBusFromConfig, so bus/core.ts would still read "= 1".
@@ -108,7 +116,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 	});
 
 	it("watch's runCycle re-emits bus files on a no-changes cycle when the bus manifest changed", async () => {
-		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] }, new Date(0));
+		let manifest = buildManifest({ core: [entry("A", "export type A = 1;")] });
 		const busEndpoint = await serveDynamic(() => manifest);
 		const repo = makeTempGitRepo();
 		try {
@@ -121,7 +129,7 @@ describe("bus sync survives an unchanged spec (finding B0)", () => {
 				"export type A = 1;",
 			);
 
-			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] }, new Date(0));
+			manifest = buildManifest({ core: [entry("A", "export type A = 2;")] });
 
 			// Abort right after the first cycle completes so the test doesn't wait
 			// on the poll interval.

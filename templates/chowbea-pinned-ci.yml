@@ -1,0 +1,49 @@
+# PR check for pinned-inputs mode: regenerate the client from the COMMITTED
+# openapi.json + chowbea.bus.json — fully offline, no endpoint, no secrets —
+# then typecheck. Staleness of main is the "Sync API Types" workflow's job,
+# not this gate's.
+#
+# Setup: ensure chowbea-axios is a devDependency so the `npx` below resolves
+# the repository-pinned version from node_modules instead of the registry.
+
+name: Validate Generated API Client (pinned)
+
+on:
+  pull_request:
+    # `reopened` matters here: the sync workflow documents close/reopen as
+    # the fallback for getting checks onto a bot-created PR.
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          # Don't leave the workflow token in .git/config while npm ci runs
+          # arbitrary postinstall scripts; nothing here pushes.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate types from pinned inputs (offline)
+        run: npx chowbea-axios generate --quiet
+
+      - name: Typecheck
+        run: npx tsc --noEmit # replace with your project's typecheck/build command

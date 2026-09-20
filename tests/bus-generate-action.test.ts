@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { executeGenerate } from "../src/core/actions/generate.js";
 import { DEFAULT_CONFIG, generateConfigTemplate, getOutputPaths } from "../src/core/config.js";
+import { buildManifest, hashText } from "../src/core/bus/manifest.js";
 import { makeBusFixture } from "./helpers/bus-fixture.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
 
@@ -30,6 +31,10 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 }
 
 const generateOptions = { dryRun: false, typesOnly: false, operationsOnly: false };
+
+function entry(name: string, declaration: string, source = "src/types.chowbea.ts") {
+	return { name, kind: "type" as const, declaration, source, line: 1, hash: hashText(declaration) };
+}
 
 describe("executeGenerate: bus cache catch-all (finding G1)", () => {
 	it("a corrupt cached bus manifest fails generate loudly, not with the generic 'run fetch first' warning", async () => {
@@ -89,6 +94,111 @@ describe("executeGenerate: bus cache catch-all (finding G1)", () => {
 
 			await inDir(dir, async () => {
 				await expect(executeGenerate(generateOptions, SILENT_LOGGER)).resolves.toBeDefined();
+			});
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+describe("executeGenerate: pinned bus manifest ([bus].file)", () => {
+	const pinnedConfig = () => ({
+		...DEFAULT_CONFIG,
+		api_endpoint: "https://staging.example.invalid/openapi.json",
+		spec_file: "./openapi.json",
+		output: { folder: "api" },
+		bus: { endpoint: "https://staging.example.invalid/bus.json", file: "chowbea.bus.json" },
+	});
+
+	it("emits _generated/bus from the pinned file and ignores the _internal cache", async () => {
+		const manifest = buildManifest({ core: [entry("Grade", `export type Grade = "A" | "B";`)] });
+		const stale = buildManifest({ core: [entry("Old", "export type Old = 1;")] });
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+			"openapi.json": PETSTORE_SPEC,
+			"chowbea.bus.json": `${JSON.stringify(manifest, null, "\t")}\n`,
+		});
+		try {
+			const config = pinnedConfig();
+			writeFileSync(join(dir, "api.config.toml"), generateConfigTemplate(config), "utf8");
+			const outputPaths = getOutputPaths(config, dir);
+			mkdirSync(dirname(outputPaths.busCache), { recursive: true });
+			writeFileSync(outputPaths.busCache, `${JSON.stringify(stale, null, "\t")}\n`, "utf8");
+
+			await inDir(dir, () => executeGenerate(generateOptions, SILENT_LOGGER));
+			const emitted = readFileSync(join(outputPaths.busDir, "core.ts"), "utf8");
+			expect(emitted).toContain("Grade");
+			expect(emitted).not.toContain("Old");
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("missing pinned file fails with an actionable 'run sync' error", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+			"openapi.json": PETSTORE_SPEC,
+		});
+		try {
+			writeFileSync(join(dir, "api.config.toml"), generateConfigTemplate(pinnedConfig()), "utf8");
+			await expect(inDir(dir, () => executeGenerate(generateOptions, SILENT_LOGGER))).rejects.toThrow(
+				/pinned bus manifest not found.*chowbea-axios sync/s,
+			);
+		} finally {
+			cleanup();
+		}
+	});
+
+	it("a tampered pinned manifest fails loudly (hash integrity)", async () => {
+		const manifest = buildManifest({ core: [entry("Grade", `export type Grade = "A" | "B";`)] });
+		const tampered = JSON.stringify({ ...manifest, hash: "0".repeat(64) });
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+			"openapi.json": PETSTORE_SPEC,
+			"chowbea.bus.json": tampered,
+		});
+		try {
+			writeFileSync(join(dir, "api.config.toml"), generateConfigTemplate(pinnedConfig()), "utf8");
+			await expect(inDir(dir, () => executeGenerate(generateOptions, SILENT_LOGGER))).rejects.toThrow(
+				/hash does not match/,
+			);
+		} finally {
+			cleanup();
+		}
+	});
+});
+
+/**
+ * Regression coverage for finding 2 (pinned-mode UX fix wave): a pinned
+ * config's spec_file is a committed artifact only `sync` writes. Before the
+ * fix, a missing pinned spec surfaced SpecNotFoundError's default hint
+ * ("run 'chowbea-axios fetch'"), which loops forever since fetch never
+ * writes spec_file. It must point at `sync` instead.
+ */
+describe("executeGenerate: pinned spec not found (finding 2)", () => {
+	it("pinned config with no local spec file on disk rejects with a 'run sync' hint, not 'fetch'", async () => {
+		const { dir, cleanup } = makeBusFixture({
+			"package.json": JSON.stringify({ name: "consumer", version: "0.0.0" }),
+		});
+		try {
+			const config = {
+				...DEFAULT_CONFIG,
+				api_endpoint: "https://staging.example.invalid/openapi.json",
+				spec_file: "./openapi.json",
+				output: { folder: "api" },
+			};
+			writeFileSync(join(dir, "api.config.toml"), generateConfigTemplate(config), "utf8");
+
+			await inDir(dir, async () => {
+				let caught: unknown;
+				try {
+					await executeGenerate(generateOptions, SILENT_LOGGER);
+				} catch (error) {
+					caught = error;
+				}
+				expect(caught).toBeInstanceOf(Error);
+				expect((caught as Error).message).toMatch(/run `chowbea-axios sync`/);
+				expect((caught as Error).message).not.toMatch(/fetch/i);
 			});
 		} finally {
 			cleanup();

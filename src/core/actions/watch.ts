@@ -14,7 +14,7 @@ import {
 	ensureOutputFolders,
 	getOutputPaths,
 	loadConfig,
-	resolveSpecSource,
+	resolveLiveSpecSource,
 	type SpecSource,
 } from "../config.js";
 import {
@@ -104,9 +104,12 @@ export async function executeWatch(
 	callbacks?: WatchCallbacks,
 ): Promise<void> {
 	// Load configuration first (auto-creates if missing)
-	const { config, projectRoot, configPath, wasCreated } = await loadConfig(
+	const { config, projectRoot, configPath, wasCreated, localOverrides } = await loadConfig(
 		options.configPath,
 	);
+	if (localOverrides.length > 0) {
+		logger.info({ overrides: localOverrides }, "Using api.config.local.toml overrides");
+	}
 
 	logger.header("chowbea-axios watch");
 	logger.debug("Configuration loaded successfully");
@@ -135,9 +138,11 @@ export async function executeWatch(
 	// Load optional generator hooks once at startup; reused on every cycle.
 	const hooks = await loadHooks(projectRoot, logger);
 
-	// Determine polling interval and spec source (local file or remote endpoint)
+	// Determine polling interval and spec source (local file or remote
+	// endpoint). `watch` is a live command — endpoints beat a pinned
+	// spec_file, same rule as `fetch` (watch has no --spec-file flag to forward).
 	const intervalMs = options.intervalMs ?? config.poll_interval_ms;
-	const specSource = resolveSpecSource(config, projectRoot);
+	const specSource = resolveLiveSpecSource(config, projectRoot);
 	const sourceLabel =
 		specSource.type === "local" ? specSource.path : specSource.endpoint;
 

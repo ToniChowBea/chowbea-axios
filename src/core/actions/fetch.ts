@@ -13,7 +13,7 @@ import {
 	getOutputPaths,
 	loadConfig,
 	type OutputPaths,
-	resolveSpecSource,
+	resolveLiveSpecSource,
 } from "../config.js";
 import {
 	fetchOpenApiSpec,
@@ -189,9 +189,12 @@ export async function executeFetch(
 
 	// Load configuration (auto-creates if missing)
 	logger.step("config", "Loading configuration...");
-	const { config, projectRoot, configPath, wasCreated } = await loadConfig(
+	const { config, projectRoot, configPath, wasCreated, localOverrides } = await loadConfig(
 		options.configPath,
 	);
+	if (localOverrides.length > 0) {
+		logger.info({ overrides: localOverrides }, "Using api.config.local.toml overrides");
+	}
 
 	if (wasCreated) {
 		logger.warn(
@@ -213,11 +216,13 @@ export async function executeFetch(
 	await ensureOutputFolders(outputPaths);
 	logger.debug({ folder: outputPaths.folder }, "Output folders ready");
 
-	// Resolve spec source (flag > config spec_file > config api_endpoint)
-	// Note: --endpoint flag overrides spec_file for remote fetching
-	const specSource = options.endpoint
-		? { type: "remote" as const, endpoint: options.endpoint }
-		: resolveSpecSource(config, projectRoot, options.specFile);
+	// Resolve spec source. `fetch` is a live command — it means "pull from
+	// a running backend" — so endpoints beat a pinned spec_file (flag
+	// endpoint > flag specFile > config endpoint > config spec_file).
+	const specSource = resolveLiveSpecSource(config, projectRoot, {
+		endpoint: options.endpoint,
+		specFile: options.specFile,
+	});
 
 	let fetchResult;
 	let sourceIdentifier: string;

@@ -115,11 +115,16 @@ export function resolveCommand(cmd: string): string {
 /**
  * Checks whether a command exists on the system PATH.
  *
- * Internal callers only — `cmd` must be a static string. We deliberately
- * do not pass `shell: true` (deprecated by Node 24 / DEP0190); Windows
- * `.cmd` shims are handled by `resolveCommand`.
+ * Internal callers only — `cmd` must be a static string. Probes via the
+ * platform's native lookup binary (`where.exe` / `which`) instead of
+ * spawning the command itself: on Windows, package managers are `.cmd`
+ * shims, and Node >= 20.12 (CVE-2024-27980) refuses to spawn `.cmd`
+ * files without `shell: true` (EINVAL) — while `shell: true` with an
+ * args array is deprecated (DEP0190). `where`/`which` are native
+ * executables, so they need neither.
  */
 export function commandExists(cmd: string): boolean {
-	const result = spawnSync(resolveCommand(cmd), ["--version"], { stdio: "pipe" });
+	const probe = process.platform === "win32" ? "where.exe" : "which";
+	const result = spawnSync(probe, [cmd], { stdio: "pipe" });
 	return result.status === 0;
 }
