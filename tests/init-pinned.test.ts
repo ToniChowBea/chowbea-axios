@@ -64,4 +64,45 @@ describe("init --pinned (non-interactive)", () => {
 			repo.cleanup();
 		}
 	}, 10_000);
+
+	// Pins the `options.pinned ?? (...)` resolution boundary in executeInit:
+	// omitting `pinned` entirely (as the CLI now forwards `values.pinned` raw,
+	// undefined when --pinned is absent) must resolve to `false` WITHOUT
+	// prompting when non-interactive — never treat "unset" as "ask anyway".
+	it("with pinned omitted + non-interactive, resolves to unpinned without prompting", async () => {
+		const repo = makeTempGitRepo();
+		try {
+			repo.write("package.json", JSON.stringify({ name: "consumer", version: "0.0.0" }));
+			const result = await inDir(repo.dir, () =>
+				executeInit(
+					{
+						force: false, skipScripts: true, skipClient: true, skipConcurrent: true,
+						skipWorkflow: true, withVitePlugins: false,
+						baseUrlEnv: "API_BASE_URL", envAccessor: "import.meta.env", tokenKey: "token",
+						authMode: "none", withCredentials: false, timeout: 10000,
+						nonInteractive: true, // `pinned` deliberately omitted — undefined, not false
+						specSource: { kind: "remote", endpoint: "http://127.0.0.1:1/openapi.json" },
+						outputFolder: "src/api", packageManager: "npm",
+					},
+					SILENT_LOGGER,
+					NO_PROMPTS, // must not throw: proves no prompt fired for the unset flag
+				),
+			);
+
+			expect(result.pinned).toBe(false);
+			expect(result.initialSyncSuccess).toBe(null); // pinned branch never entered
+			expect(result.initialFetchSuccess).toBe(null); // localhost endpoint — fetch skipped too (fast/offline)
+			expect(result.workflowCreated).toBe(false); // skipWorkflow: true
+
+			const config = toml.parse(readFileSync(join(repo.dir, "api.config.toml"), "utf8")) as Record<string, unknown>;
+			expect(config.api_endpoint).toBe("http://127.0.0.1:1/openapi.json");
+			expect(config.spec_file).toBeUndefined(); // pinned emission did not fire
+
+			const gitignore = readFileSync(join(repo.dir, ".gitignore"), "utf8");
+			expect(gitignore).toContain("_internal/");
+			expect(gitignore).not.toContain("_generated/");
+		} finally {
+			repo.cleanup();
+		}
+	});
 });

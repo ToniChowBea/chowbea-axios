@@ -617,7 +617,11 @@ async function handleInit(args: string[]): Promise<void> {
 			"skip-concurrent": { type: "boolean", default: false },
 			"skip-workflow": { type: "boolean", default: false },
 			"with-vite-plugins": { type: "boolean", default: false },
-			pinned: { type: "boolean", default: false },
+			// No `default` — stays `undefined` when the flag is absent so
+			// executeInit's `options.pinned ?? (...)` can tell "not passed"
+			// apart from "explicitly declined" and fall through to its own
+			// non-interactive/remote-source-gated confirm prompt.
+			pinned: { type: "boolean" },
 			"base-url-env": {
 				type: "string",
 				default: DEFAULT_INSTANCE_CONFIG.base_url_env,
@@ -715,7 +719,8 @@ async function handleInit(args: string[]): Promise<void> {
 		specSource,
 		outputFolder: values["output-folder"],
 		packageManager: rawPm as InitActionOptions["packageManager"],
-		pinned: values.pinned ?? false,
+		// Forward raw (undefined when absent) — see the parseArgs comment above.
+		pinned: values.pinned,
 	};
 
 	// Surface a clearer error when running non-interactively without a
