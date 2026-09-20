@@ -210,25 +210,45 @@ export async function executeGenerate(
 
 	if (config.bus) {
 		const { readFile } = await import("node:fs/promises");
+		const path = await import("node:path");
 		const { parseManifest } = await import("../bus/manifest.js");
 		const { writeBusFiles } = await import("../bus/emit.js");
 
-		// Only an absent cache file is the expected "never ran fetch" case —
-		// swallow that one as a warning. A cache file that exists but fails to
-		// parse/validate, or an emission failure (e.g. filename collision),
-		// is a real problem and must fail generate loudly, same as any other
-		// failure in this action (e.g. SpecNotFoundError above).
-		let cached: string | null = null;
-		try {
-			cached = await readFile(outputPaths.busCache, "utf8");
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			logger.warn("Type bus configured but no cached manifest — run fetch first");
-		}
-		if (cached !== null) {
-			const manifest = parseManifest(cached);
+		if (config.bus.file) {
+			// Pinned mode: the committed manifest is the source of truth; the
+			// _internal cache is not consulted. parseManifest is the trust
+			// boundary — a tampered pinned file fails its hash check here.
+			const pinnedPath = path.resolve(projectRoot, config.bus.file);
+			let pinned: string;
+			try {
+				pinned = await readFile(pinnedPath, "utf8");
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+				throw new Error(
+					`pinned bus manifest not found at ${pinnedPath} — run \`chowbea-axios sync\` to create it`,
+				);
+			}
+			const manifest = parseManifest(pinned);
 			await writeBusFiles(manifest, outputPaths.busDir);
-			logger.info("Type bus: regenerated from cache");
+			logger.info("Type bus: regenerated from pinned manifest");
+		} else {
+			// Only an absent cache file is the expected "never ran fetch" case —
+			// swallow that one as a warning. A cache file that exists but fails to
+			// parse/validate, or an emission failure (e.g. filename collision),
+			// is a real problem and must fail generate loudly, same as any other
+			// failure in this action (e.g. SpecNotFoundError above).
+			let cached: string | null = null;
+			try {
+				cached = await readFile(outputPaths.busCache, "utf8");
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+				logger.warn("Type bus configured but no cached manifest — run fetch first");
+			}
+			if (cached !== null) {
+				const manifest = parseManifest(cached);
+				await writeBusFiles(manifest, outputPaths.busDir);
+				logger.info("Type bus: regenerated from cache");
+			}
 		}
 	}
 
