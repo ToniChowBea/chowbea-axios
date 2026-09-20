@@ -282,7 +282,17 @@ describe("api.config.local.toml overlay", () => {
 
 	it("a malformed local file fails loudly (never silently ignored)", async () => {
 		const dir = await overlayFixture(COMMITTED, `api_endpoint = not valid toml`);
-		await expect(loadConfig(join(dir, "api.config.toml"))).rejects.toThrow(/api\.config\.local\.toml/);
+		try {
+			await loadConfig(join(dir, "api.config.toml"));
+			expect.unreachable();
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			expect(msg).toMatch(/api\.config\.local\.toml/);
+			// The local-overlay-specific recovery hint must survive loadConfig's
+			// outer catch, not get re-wrapped with the generic "run init" hint.
+			const hint = (err as { recoveryHint?: string }).recoveryHint;
+			expect(hint).toBe("Fix or delete the local override file.");
+		}
 		await rm(dir, { recursive: true, force: true });
 	});
 });

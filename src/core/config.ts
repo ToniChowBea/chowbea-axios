@@ -724,7 +724,7 @@ export async function loadConfig(
       localOverridePresent: localExists,
     };
   } catch (error) {
-    if (error instanceof ConfigValidationError) {
+    if (error instanceof ConfigValidationError || error instanceof ConfigError) {
       throw error;
     }
 
