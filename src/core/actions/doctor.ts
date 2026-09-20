@@ -100,7 +100,12 @@ export async function executeDoctor(
 		trackedGenerated = listTrackedFiles(projectRoot, generatedRel);
 		trackedArtifacts.push(...trackedGenerated);
 	}
-	const hasIgnoreRule = await isGitignored(projectRoot, INTERNAL_IGNORE_ENTRY);
+	const hasInternalRule = await isGitignored(projectRoot, INTERNAL_IGNORE_ENTRY);
+	// Pinned mode requires the `_generated/` rule too — vacuously satisfied
+	// otherwise (non-pinned setups legitimately commit `_generated/`).
+	const hasGeneratedRule =
+		!isPinnedMode(config) || (await isGitignored(projectRoot, GENERATED_IGNORE_ENTRY));
+	const hasIgnoreRule = hasInternalRule && hasGeneratedRule;
 
 	if (trackedArtifacts.length === 0 && hasIgnoreRule) {
 		logger.done(
@@ -126,8 +131,12 @@ export async function executeDoctor(
 		}
 	}
 	if (!hasIgnoreRule) {
+		const missing = [
+			...(!hasInternalRule ? [INTERNAL_IGNORE_ENTRY] : []),
+			...(!hasGeneratedRule ? [GENERATED_IGNORE_ENTRY] : []),
+		];
 		logger.warn(
-			`No '${INTERNAL_IGNORE_ENTRY}' rule in .gitignore — the cache may get re-committed.`,
+			`Missing .gitignore rule(s): ${missing.map((m) => `'${m}'`).join(", ")} — regenerable output may get re-committed.`,
 		);
 	}
 
@@ -147,7 +156,7 @@ export async function executeDoctor(
 	}
 
 	let ignoreRuleAdded = false;
-	if (!hasIgnoreRule) {
+	if (!hasInternalRule) {
 		ignoreRuleAdded = await ensureGitignoreEntry(
 			projectRoot,
 			INTERNAL_IGNORE_ENTRY,
@@ -185,9 +194,11 @@ export async function executeDoctor(
 			"git",
 			`Untracked ${pathspecs.map((p) => `${p}/`).join(", ")} (files kept on disk)`,
 		);
-		if (ignoreRuleAdded) {
-			stageFiles(projectRoot, [".gitignore"]);
-		}
+	}
+	// Stage the .gitignore repair even when nothing was tracked — a pinned
+	// repo can be missing only the `_generated/` rule.
+	if (ignoreRuleAdded) {
+		stageFiles(projectRoot, [".gitignore"]);
 	}
 
 	logger.done("Repaired. Commit the staged changes to finish.");
