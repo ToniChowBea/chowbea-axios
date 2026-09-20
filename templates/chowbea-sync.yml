@@ -23,6 +23,9 @@
 #      will NOT run on the sync PR unless you either (a) set `token:`
 #      below to a fine-grained PAT or GitHub App token with contents +
 #      pull-requests write, or (b) close and reopen the PR manually.
+#
+#   4. Ensure chowbea-axios is a devDependency so the `npx` below resolves
+#      the repository-pinned version from node_modules, not the registry.
 
 name: Sync API Types
 
@@ -49,6 +52,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Don't leave the workflow token in .git/config while npm ci runs
+          # arbitrary postinstall scripts. create-pull-request authenticates
+          # with its own `token` input, so it doesn't need persisted creds.
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
