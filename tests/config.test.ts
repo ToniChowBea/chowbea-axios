@@ -306,7 +306,8 @@ describe("resolveLiveSpecSource (fetch/watch: endpoints beat spec_file)", () => 
 	it("flag endpoint > flag specFile > config endpoint > config spec_file", () => {
 		expect(resolveLiveSpecSource(pinned, "/p", { endpoint: "http://localhost:3000/openapi.json", specFile: "x.json" }))
 			.toEqual({ type: "remote", endpoint: "http://localhost:3000/openapi.json" });
-		expect(resolveLiveSpecSource(pinned, "/p", { specFile: "x.json" })).toEqual({ type: "local", path: "/p/x.json" });
-		expect(resolveLiveSpecSource({ ...pinned, api_endpoint: undefined }, "/p")).toEqual({ type: "local", path: "/p/openapi.json" });
+		// join() keeps the expectation platform-native (Windows joins with "\").
+		expect(resolveLiveSpecSource(pinned, "/p", { specFile: "x.json" })).toEqual({ type: "local", path: join("/p", "x.json") });
+		expect(resolveLiveSpecSource({ ...pinned, api_endpoint: undefined }, "/p")).toEqual({ type: "local", path: join("/p", "openapi.json") });
 	});
 });
