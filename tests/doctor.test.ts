@@ -100,4 +100,33 @@ describe("executeDoctor", () => {
 			repo.cleanup();
 		}
 	});
+
+	it("pinned mode: tracked _generated files are reported and --fix untracks + ignores them", async () => {
+		const repo = makeTempGitRepo();
+		try {
+			repo.write("package.json", JSON.stringify({ name: "consumer", version: "0.0.0" }));
+			repo.write(
+				"api.config.toml",
+				generateConfigTemplate({
+					...DEFAULT_CONFIG,
+					api_endpoint: "https://staging.example.com/openapi.json",
+					spec_file: "openapi.json",
+					output: { folder: "api" },
+				}),
+			);
+			repo.write("api/_generated/api.types.ts", "export type X = 1;\n");
+			repo.git(["add", "."]);
+			repo.git(["commit", "-m", "init with committed _generated"]);
+
+			const result = await inDir(repo.dir, () => executeDoctor({ fix: true }, SILENT_LOGGER));
+
+			expect(result.trackedArtifacts).toContain("api/_generated/api.types.ts");
+			expect(result.fixApplied).toBe(true);
+			expect(listTrackedFiles(repo.dir, "api/_generated")).toEqual([]);
+			expect(existsSync(join(repo.dir, "api/_generated/api.types.ts"))).toBe(true);
+			expect(readFileSync(join(repo.dir, ".gitignore"), "utf8")).toContain("_generated/");
+		} finally {
+			repo.cleanup();
+		}
+	});
 });

@@ -14,7 +14,7 @@
 import path from "node:path";
 
 import type { Logger } from "../../adapters/logger-interface.js";
-import { getOutputPaths, loadConfig } from "../config.js";
+import { getOutputPaths, isPinnedMode, loadConfig } from "../config.js";
 import {
 	isGitRepo,
 	listTrackedFiles,
@@ -26,6 +26,9 @@ import { ensureGitignoreEntry, isGitignored } from "./env-manager.js";
 const INTERNAL_IGNORE_ENTRY = "_internal/";
 const INTERNAL_IGNORE_COMMENT =
 	"# chowbea-axios cache (timestamps, downloaded specs)";
+const GENERATED_IGNORE_ENTRY = "_generated/";
+const GENERATED_IGNORE_COMMENT =
+	"# chowbea-axios generated output (pinned-inputs mode — regenerate with `chowbea-axios generate`)";
 
 export interface DoctorActionOptions {
 	configPath?: string;
@@ -76,7 +79,21 @@ export async function executeDoctor(
 		.relative(projectRoot, paths.internal)
 		.split(path.sep)
 		.join("/");
-	const trackedArtifacts = listTrackedFiles(projectRoot, internalRel);
+	const generatedRel = path
+		.relative(projectRoot, paths.generated)
+		.split(path.sep)
+		.join("/");
+	const trackedInternal = listTrackedFiles(projectRoot, internalRel);
+	const trackedArtifacts = [...trackedInternal];
+	// Pinned mode's committed spec regenerates `_generated/` deterministically —
+	// tracking it churns on every regen just like `_internal/`. Non-pinned
+	// setups legitimately commit `_generated/` (no pinned spec to regenerate
+	// from in CI), so this scan only runs in pinned mode.
+	let trackedGenerated: string[] = [];
+	if (isPinnedMode(config)) {
+		trackedGenerated = listTrackedFiles(projectRoot, generatedRel);
+		trackedArtifacts.push(...trackedGenerated);
+	}
 	const hasIgnoreRule = await isGitignored(projectRoot, INTERNAL_IGNORE_ENTRY);
 
 	if (trackedArtifacts.length === 0 && hasIgnoreRule) {
@@ -134,12 +151,34 @@ export async function executeDoctor(
 			logger.step("gitignore", `Added ${INTERNAL_IGNORE_ENTRY} to .gitignore`);
 		}
 	}
+	if (isPinnedMode(config)) {
+		const generatedIgnoreAdded = await ensureGitignoreEntry(
+			projectRoot,
+			GENERATED_IGNORE_ENTRY,
+			GENERATED_IGNORE_COMMENT,
+		);
+		if (generatedIgnoreAdded) {
+			logger.step("gitignore", `Added ${GENERATED_IGNORE_ENTRY} to .gitignore`);
+			ignoreRuleAdded = true;
+		}
+	}
 
 	let untracked: string[] = [];
 	if (trackedArtifacts.length > 0) {
-		removeFromIndex(projectRoot, [internalRel]);
+		// `git rm --cached` errors on a pathspec matching nothing, so only pass
+		// the folders that actually have tracked entries (a pinned repo may
+		// have tracked `_generated/` files with a clean `_internal/`, or vice
+		// versa).
+		const pathspecs = [
+			...(trackedInternal.length > 0 ? [internalRel] : []),
+			...(trackedGenerated.length > 0 ? [generatedRel] : []),
+		];
+		removeFromIndex(projectRoot, pathspecs);
 		untracked = trackedArtifacts;
-		logger.step("git", `Untracked ${internalRel}/ (files kept on disk)`);
+		logger.step(
+			"git",
+			`Untracked ${pathspecs.map((p) => `${p}/`).join(", ")} (files kept on disk)`,
+		);
 		if (ignoreRuleAdded) {
 			stageFiles(projectRoot, [".gitignore"]);
 		}
