@@ -9,6 +9,7 @@ import {
 	DEFAULT_INSTANCE_CONFIG,
 	generateConfigTemplate,
 	getOutputPaths,
+	isPinnedMode,
 	loadConfig,
 } from "../src/core/config.js";
 import { ConfigValidationError } from "../src/core/errors.js";
@@ -203,5 +204,40 @@ endpoint = "https://staging.example.com/.well-known/chowbea.json"
 		expect(paths.busCache.endsWith(join("_internal", "chowbea.bus.json"))).toBe(
 			true,
 		);
+	});
+});
+
+describe("BusConfig.file (pinned manifest)", () => {
+	it("accepts an optional non-empty file and rejects an empty one", async () => {
+		const dir = join(tmpdir(), `chowbea-cfg-${Date.now()}`);
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "package.json"), "{}", "utf8");
+		const base = `api_endpoint = "https://x.example/openapi.json"\npoll_interval_ms = 5000\n[output]\nfolder = "src/api"\n`;
+		await writeFile(join(dir, "api.config.toml"), `${base}[bus]\nendpoint = "https://x.example/bus.json"\nfile = "chowbea.bus.json"\n`, "utf8");
+		const { config } = await loadConfig(join(dir, "api.config.toml"));
+		expect(config.bus).toEqual({ endpoint: "https://x.example/bus.json", file: "chowbea.bus.json" });
+
+		await writeFile(join(dir, "api.config.toml"), `${base}[bus]\nendpoint = "https://x.example/bus.json"\nfile = ""\n`, "utf8");
+		await expect(loadConfig(join(dir, "api.config.toml"))).rejects.toThrow(/bus\.file/);
+		await rm(dir, { recursive: true, force: true });
+	});
+});
+
+describe("generateConfigTemplate: pinned mode + [bus]", () => {
+	it("emits both spec sources uncommented when both are set, plus the [bus] block", () => {
+		const config = {
+			...DEFAULT_CONFIG,
+			api_endpoint: "https://staging.example.com/openapi.json",
+			spec_file: "openapi.json",
+			bus: { endpoint: "https://staging.example.com/bus.json", file: "chowbea.bus.json" },
+		};
+		const parsed = toml.parse(generateConfigTemplate(config)) as Record<string, unknown>;
+		expect(parsed.api_endpoint).toBe(config.api_endpoint);
+		expect(parsed.spec_file).toBe("openapi.json");
+		expect(parsed.bus).toEqual({ endpoint: config.bus.endpoint, file: "chowbea.bus.json" });
+	});
+	it("isPinnedMode is true only when api_endpoint and spec_file are both set", () => {
+		expect(isPinnedMode({ ...DEFAULT_CONFIG, api_endpoint: "https://x", spec_file: "openapi.json" })).toBe(true);
+		expect(isPinnedMode(DEFAULT_CONFIG)).toBe(false);
 	});
 });

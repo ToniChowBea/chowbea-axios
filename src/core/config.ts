@@ -38,6 +38,8 @@ export interface FetchConfig {
 export interface BusConfig {
   /** URL of the served chowbea.bus.json (conventionally /.well-known/chowbea.json). */
   endpoint: string;
+  /** Repo-relative path of the pinned (committed) manifest. Enables pinned mode for the bus. */
+  file?: string;
 }
 
 /**
@@ -159,13 +161,24 @@ function tomlEscape(value: string): string {
  */
 export function generateConfigTemplate(config: ApiConfig): string {
   // Emit whichever spec source is configured as the active line, and the
-  // other as a commented-out example.
+  // other as a commented-out example. In pinned mode (both set), emit both uncommented.
   const fallbackEndpoint = config.api_endpoint ?? "https://api.example.com/openapi.json";
-  const specSourceBlock = config.spec_file
-    ? `# api_endpoint = ${tomlEscape(fallbackEndpoint)}  # Use remote endpoint instead of local file
+  const specSourceBlock =
+    config.spec_file && config.api_endpoint
+      ? `api_endpoint = ${tomlEscape(config.api_endpoint)}
+spec_file = ${tomlEscape(config.spec_file)}  # pinned spec, committed — updated by \`chowbea-axios sync\``
+      : config.spec_file
+        ? `# api_endpoint = ${tomlEscape(fallbackEndpoint)}  # Use remote endpoint instead of local file
 spec_file = ${tomlEscape(config.spec_file)}`
-    : `api_endpoint = ${tomlEscape(config.api_endpoint ?? "")}
+        : `api_endpoint = ${tomlEscape(config.api_endpoint ?? "")}
 # spec_file = "./openapi.json"  # Use local file instead of remote`;
+
+  const busBlock = config.bus
+    ? `
+[bus]
+endpoint = ${tomlEscape(config.bus.endpoint)}${config.bus.file ? `\nfile = ${tomlEscape(config.bus.file)}` : ""}
+`
+    : "";
 
   return `# Chowbea Axios Configuration
 
@@ -174,7 +187,7 @@ poll_interval_ms = ${config.poll_interval_ms}
 
 [output]
 folder = ${tomlEscape(config.output.folder)}
-
+${busBlock}
 [instance]
 base_url_env = ${tomlEscape(config.instance.base_url_env)}
 env_accessor = ${tomlEscape(config.instance.env_accessor)}
@@ -515,7 +528,18 @@ function validateBusConfig(bus: unknown): BusConfig | undefined {
     );
   }
 
-  return { endpoint: busObj.endpoint };
+  let file: string | undefined;
+  if (busObj.file !== undefined) {
+    if (typeof busObj.file !== "string" || busObj.file.trim() === "") {
+      throw new ConfigValidationError(
+        "bus.file",
+        "bus.file must be a non-empty string path (the committed manifest, e.g. \"chowbea.bus.json\")"
+      );
+    }
+    file = busObj.file;
+  }
+
+  return file ? { endpoint: busObj.endpoint, file } : { endpoint: busObj.endpoint };
 }
 
 /**
@@ -558,6 +582,14 @@ export function resolveSpecSource(
     );
   }
   return { type: "remote", endpoint: config.api_endpoint };
+}
+
+/**
+ * Pinned-inputs mode: both the stable endpoint (sync source) and the
+ * committed spec path are configured. See the 2026-09-20 design spec.
+ */
+export function isPinnedMode(config: ApiConfig): boolean {
+  return Boolean(config.api_endpoint && config.spec_file);
 }
 
 /**
