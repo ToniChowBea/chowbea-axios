@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { getSignalNumber } from "../src/router.js";
 
 /**
  * Tests for signal exit handling in relaunchWithBun and similar spawn wrappers.
@@ -46,6 +47,56 @@ describe("Signal exit handling (Issue #105)", () => {
 	});
 });
 
+describe("getSignalNumber (ESM import correctness)", () => {
+	// This test ensures getSignalNumber uses a proper ESM import, not require().
+	// On POSIX systems, SIGTERM is 15 and SIGINT is 2 by convention.
+	// On Windows, these signals may not be defined or have different meanings.
+
+	it("maps SIGTERM to its numeric value on POSIX (15)", () => {
+		const signum = getSignalNumber("SIGTERM");
+		if (process.platform === "win32") {
+			// Windows may not have POSIX signals, or they may be different.
+			// Just verify the function returns a number or null.
+			expect(signum === null || typeof signum === "number").toBe(true);
+		} else {
+			// On POSIX (Linux, macOS), SIGTERM should be 15.
+			expect(signum).toBe(15);
+		}
+	});
+
+	it("maps SIGINT to its numeric value on POSIX (2)", () => {
+		const signum = getSignalNumber("SIGINT");
+		if (process.platform === "win32") {
+			// Windows may not have POSIX signals, or they may be different.
+			expect(signum === null || typeof signum === "number").toBe(true);
+		} else {
+			// On POSIX (Linux, macOS), SIGINT should be 2.
+			expect(signum).toBe(2);
+		}
+	});
+
+	it("returns null for unknown signal names", () => {
+		const signum = getSignalNumber("SIGNOTAREALTHING");
+		expect(signum).toBeNull();
+	});
+
+	it("computes correct exit code for SIGTERM (128 + 15 = 143 on POSIX)", () => {
+		const signum = getSignalNumber("SIGTERM");
+		if (process.platform !== "win32" && signum !== null) {
+			const exitCode = 128 + signum;
+			expect(exitCode).toBe(143);
+		}
+	});
+
+	it("computes correct exit code for SIGINT (128 + 2 = 130 on POSIX)", () => {
+		const signum = getSignalNumber("SIGINT");
+		if (process.platform !== "win32" && signum !== null) {
+			const exitCode = 128 + signum;
+			expect(exitCode).toBe(130);
+		}
+	});
+});
+
 /**
  * Exit code mapping helper test: demonstrates correct handling of
  * spawnSync results (status vs signal).
@@ -58,14 +109,8 @@ function mockExitHandler(result: ReturnType<typeof spawnSync>): number {
 	if (result.signal) {
 		// Signal death: return 128 + signal number (standard convention).
 		// Try to get the signal number; fall back to 1 if unavailable.
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
-			const signals = require("node:os").constants.signals as Record<string, number>;
-			const signalNum = signals[result.signal];
-			return signalNum !== undefined ? 128 + signalNum : 1;
-		} catch {
-			return 1;
-		}
+		const signalNum = getSignalNumber(result.signal);
+		return signalNum !== null ? 128 + signalNum : 1;
 	}
 	// Unknown failure: return non-zero.
 	return 1;

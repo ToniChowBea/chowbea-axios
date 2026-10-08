@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 import { commandExists, resolveCommand, safeSpawnSync } from "./core/pm.js";
@@ -68,16 +69,10 @@ function relaunchWithBun(argv: string[]): boolean {
 /**
  * Get the numeric signal value for a signal name (e.g., "SIGTERM" -> 15).
  * Returns null if the signal name is unknown or unavailable on this platform.
+ * Exported for testing.
  */
-function getSignalNumber(signalName: string): number | null {
-	try {
-		// Node's os.constants.signals maps signal names to numbers.
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const signals = require("node:os").constants.signals as Record<string, number>;
-		return signals[signalName] ?? null;
-	} catch {
-		return null;
-	}
+export function getSignalNumber(signalName: string): number | null {
+	return constants.signals[signalName as keyof typeof constants.signals] ?? null;
 }
 
 /**
