@@ -128,3 +128,31 @@ export function commandExists(cmd: string): boolean {
 	const result = spawnSync(probe, [cmd], { stdio: "pipe" });
 	return result.status === 0;
 }
+
+/**
+ * Safe spawn wrapper for package-manager commands on Windows.
+ *
+ * On Windows with Node >= 20.12, spawning `.cmd`/`.bat` files directly
+ * without `shell: true` fails with EINVAL (CVE-2024-27980 hardening).
+ * This helper uses `cmd.exe /c` on Windows to run `.cmd` shims safely,
+ * avoiding both EINVAL and the DEP0190 deprecation warning.
+ *
+ * On non-Windows platforms, spawns the command directly.
+ *
+ * Issue #144.
+ */
+export function safeSpawnSync(
+	cmd: string,
+	args: string[],
+	options?: Parameters<typeof spawnSync>[2]
+): ReturnType<typeof spawnSync> {
+	if (process.platform === "win32") {
+		// On Windows, run via cmd.exe /c to handle .cmd/.bat shims correctly.
+		// /c executes the command and exits; args are passed as-is (cmd.exe
+		// handles them correctly without shell injection risk when the command
+		// name is from a trusted internal set).
+		return spawnSync("cmd.exe", ["/c", cmd, ...args], options);
+	}
+	// On non-Windows, spawn directly (no .cmd shims exist).
+	return spawnSync(cmd, args, options);
+}

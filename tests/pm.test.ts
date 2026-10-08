@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { commandExists, detectPackageManager, resolveCommand } from "../src/core/pm.js";
+import { commandExists, detectPackageManager, resolveCommand, safeSpawnSync } from "../src/core/pm.js";
 
 async function withFixture<T>(
 	files: string[],
@@ -91,5 +91,33 @@ describe("resolveCommand", () => {
 			expect(resolveCommand("pnpm")).toBe("pnpm");
 			expect(resolveCommand("/usr/local/bin/bun")).toBe("/usr/local/bin/bun");
 		}
+	});
+});
+
+describe("safeSpawnSync", () => {
+	it("successfully spawns a simple command (node --version)", () => {
+		// This tests that safeSpawnSync can run a basic command successfully.
+		// On Windows it uses cmd.exe /c node --version; on Unix it runs node --version directly.
+		const result = safeSpawnSync("node", ["--version"]);
+		expect(result.status).toBe(0);
+		expect(result.error).toBeUndefined();
+	});
+
+	it("handles non-existent commands gracefully", () => {
+		// Spawning a non-existent command should return a non-zero status or error.
+		const result = safeSpawnSync("definitely-not-a-real-command-9923", []);
+		// On Windows, cmd.exe will return status 1 for missing commands.
+		// On Unix, the spawn will fail with an error.
+		const failed = result.status !== 0 || result.error !== undefined;
+		expect(failed).toBe(true);
+	});
+
+	it("correctly passes arguments to the spawned command", () => {
+		// Test that args are correctly forwarded by checking node's eval output.
+		const result = safeSpawnSync("node", ["--eval", "console.log('test-output')"], {
+			stdio: "pipe",
+		});
+		expect(result.status).toBe(0);
+		expect(result.stdout?.toString().trim()).toBe("test-output");
 	});
 });

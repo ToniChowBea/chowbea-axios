@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createCliRenderer } from "@opentui/core";
@@ -10,6 +9,7 @@ import {
 	detectPackageManager,
 	getInstallCommand,
 	resolveCommand,
+	safeSpawnSync,
 } from "../core/pm.js";
 
 /**
@@ -51,10 +51,10 @@ async function installPackage(
 ): Promise<void> {
 	console.log(`Installing ${pkg}...`);
 	const pm = await detectPackageManager(projectRoot);
-	// Drop `shell: true` (Node 24 DEP0190); resolveCommand handles
-	// Windows .cmd shims. Issue #16.
+	// Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+	// refuses to spawn .cmd files without shell: true, returning EINVAL). Issue #144.
 	const [cmd, ...args] = getInstallCommand(pm, pkg, dev);
-	spawnSync(resolveCommand(cmd), args, {
+	safeSpawnSync(resolveCommand(cmd), args, {
 		cwd: projectRoot,
 		stdio: "inherit",
 		timeout: 60_000,
@@ -83,9 +83,9 @@ async function ensureProjectDependencies(): Promise<void> {
 				);
 				process.exit(1);
 			}
-			// Drop `shell: true` (Node 24 DEP0190); resolveCommand handles
-			// Windows .cmd shims. Issue #16.
-			spawnSync(resolveCommand(pm), ["install"], {
+			// Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+			// refuses to spawn .cmd files without shell: true, returning EINVAL). Issue #144.
+			safeSpawnSync(resolveCommand(pm), ["install"], {
 				cwd: projectRoot,
 				stdio: "inherit",
 				timeout: 120_000,

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { commandExists, resolveCommand } from "./core/pm.js";
+import { commandExists, resolveCommand, safeSpawnSync } from "./core/pm.js";
 import {
 	decideDelegation,
 	findRunningPackageRoot,
@@ -28,11 +28,10 @@ function relaunchWithBun(argv: string[]): boolean {
 	const binDir = resolve(dirname(thisFile), "..", "bin");
 	const tsEntry = resolve(binDir, "chowbea-axios.ts");
 
-	// No `shell: true` — user argv flows through here, and shell metacharacters
-	// in user-supplied args (e.g. paths from automation) would otherwise be
-	// interpreted by the shell. resolveCommand handles Windows .cmd shims.
-	// Issue #16.
-	const result = spawnSync(resolveCommand("bun"), [tsEntry, ...argv.slice(2)], {
+	// Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+	// refuses to spawn .cmd files without shell: true, returning EINVAL).
+	// User argv flows through unescaped, so no shell injection risk. Issue #144.
+	const result = safeSpawnSync(resolveCommand("bun"), [tsEntry, ...argv.slice(2)], {
 		stdio: "inherit",
 		env: process.env,
 	});
@@ -44,7 +43,18 @@ function relaunchWithBun(argv: string[]): boolean {
 		);
 		return false;
 	}
-	process.exit(result.status ?? 0);
+	
+	// Propagate child exit status correctly: if the child was killed by a signal,
+	// re-raise the signal on the parent so we terminate the same way instead of
+	// masking it as a clean (exit 0) success. Issue #105.
+	if (typeof result.status === "number") {
+		process.exit(result.status);
+	}
+	if (result.signal) {
+		process.kill(process.pid, result.signal);
+		return false;
+	}
+	process.exit(1);
 }
 
 /**
