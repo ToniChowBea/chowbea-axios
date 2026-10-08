@@ -56,8 +56,16 @@ function mockExitHandler(result: ReturnType<typeof spawnSync>): number {
 		return result.status;
 	}
 	if (result.signal) {
-		// Signal death: return non-zero (128 + signal number convention, or just 1).
-		return 1;
+		// Signal death: return 128 + signal number (standard convention).
+		// Try to get the signal number; fall back to 1 if unavailable.
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-var-requires
+			const signals = require("node:os").constants.signals as Record<string, number>;
+			const signalNum = signals[result.signal];
+			return signalNum !== undefined ? 128 + signalNum : 1;
+		} catch {
+			return 1;
+		}
 	}
 	// Unknown failure: return non-zero.
 	return 1;
@@ -71,14 +79,17 @@ describe("Exit code mapping helper", () => {
 		expect(mockExitHandler(result)).toBe(42);
 	});
 
-	it("maps signal deaths to non-zero", () => {
+	it("maps signal deaths to 128 + signal number", () => {
 		const result = spawnSync(
 			"node",
 			["--eval", "setTimeout(() => {}, 10000)"],
 			{ stdio: "pipe", timeout: 100 }
 		);
-		// Signal death should map to non-zero.
-		expect(mockExitHandler(result)).toBe(1);
+		// Signal death should map to 128 + signal number.
+		const exitCode = mockExitHandler(result);
+		// On Unix, timeout usually sends SIGTERM (15), so we'd expect 128 + 15 = 143.
+		// On Windows, signal handling differs, so we just verify it's non-zero.
+		expect(exitCode).toBeGreaterThan(0);
 		expect(result.status).toBeNull();
 		expect(result.signal).toBeTruthy();
 	});

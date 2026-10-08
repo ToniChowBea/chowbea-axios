@@ -3,6 +3,8 @@
  * Shared across init, generate, and fetch commands.
  */
 
+import spawnCross from "cross-spawn";
+import type { SpawnSyncOptions } from "node:child_process";
 import { spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
@@ -130,29 +132,25 @@ export function commandExists(cmd: string): boolean {
 }
 
 /**
- * Safe spawn wrapper for package-manager commands on Windows.
+ * Safe spawn wrapper for package-manager commands that may be `.cmd`/`.bat`
+ * shims on Windows.
  *
- * On Windows with Node >= 20.12, spawning `.cmd`/`.bat` files directly
- * without `shell: true` fails with EINVAL (CVE-2024-27980 hardening).
- * This helper uses `cmd.exe /c` on Windows to run `.cmd` shims safely,
- * avoiding both EINVAL and the DEP0190 deprecation warning.
+ * On Windows with Node >= 20.12, spawning `.cmd`/`.bat` files directly fails
+ * with EINVAL (CVE-2024-27980 hardening). This wrapper uses `cross-spawn`,
+ * which detects .cmd/.bat targets and escapes arguments correctly for
+ * cmd.exe, preventing shell injection while working around the EINVAL issue.
  *
- * On non-Windows platforms, spawns the command directly.
+ * On non-Windows platforms, this is a direct pass-through to spawnSync.
  *
  * Issue #144.
  */
 export function safeSpawnSync(
 	cmd: string,
-	args: string[],
-	options?: Parameters<typeof spawnSync>[2]
-): ReturnType<typeof spawnSync> {
-	if (process.platform === "win32") {
-		// On Windows, run via cmd.exe /c to handle .cmd/.bat shims correctly.
-		// /c executes the command and exits; args are passed as-is (cmd.exe
-		// handles them correctly without shell injection risk when the command
-		// name is from a trusted internal set).
-		return spawnSync("cmd.exe", ["/c", cmd, ...args], options);
-	}
-	// On non-Windows, spawn directly (no .cmd shims exist).
-	return spawnSync(cmd, args, options);
+	args: ReadonlyArray<string> = [],
+	options?: SpawnSyncOptions
+): ReturnType<typeof spawnCross.sync> {
+	// cross-spawn handles Windows .cmd/.bat shims safely by detecting them and
+	// escaping arguments correctly for cmd.exe when needed. On non-Windows, it's
+	// a pass-through to child_process.spawn.
+	return spawnCross.sync(cmd, args, options);
 }
