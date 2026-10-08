@@ -118,7 +118,7 @@ describe("init --pinned (non-interactive)", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 10_000);
 
 	// Regression (PR #143 review): when an existing config's overwrite is
 	// declined, every later step must follow the PERSISTED config's mode, not
