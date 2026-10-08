@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The executeResolve tests spawn a real git repo (init/commit/branch/merge)
 // plus a full generator run per test; Windows CI runners occasionally blow
@@ -12,6 +12,14 @@ import { DEFAULT_CONFIG, generateConfigTemplate } from "../src/core/config.js";
 import { listUnmergedFiles } from "../src/core/git.js";
 import { makeTempGitRepo, type TempGitRepo } from "./helpers/git-repo.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
+
+// Safety net: ensure cwd is always restored to project root after each test.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
 
 describe("partitionConflicts", () => {
 	it("separates files under the generated dir from everything else", () => {
@@ -68,6 +76,7 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }
