@@ -6,7 +6,6 @@
  * @inquirer/prompts.
  */
 
-import { spawnSync } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -49,6 +48,7 @@ import {
   getInstallCommand,
   getRunCommand,
   resolveCommand,
+  safeSpawnSync,
   type PackageManager,
 } from "../pm.js";
 
@@ -313,10 +313,10 @@ async function ensureAxios(
 
   logger.step("deps", "Installing axios...");
 
-  // Drop `shell: true` (deprecated by Node 24 / DEP0190); resolveCommand
-  // handles the Windows `.cmd` shim path. Issue #16.
+  // Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+  // refuses to spawn .cmd files without shell: true, returning EINVAL). Issue #144.
   const [cmd, ...args] = getInstallCommand(pm, "axios");
-  const result = spawnSync(resolveCommand(cmd), args, {
+  const result = safeSpawnSync(resolveCommand(cmd), args, {
     cwd: projectRoot,
     stdio: "pipe",
     timeout: 60_000,
@@ -485,10 +485,10 @@ async function ensureConcurrently(
 
   logger.step("deps", "Installing concurrently...");
 
-  // Drop `shell: true` (deprecated by Node 24 / DEP0190); resolveCommand
-  // handles the Windows `.cmd` shim path. Issue #16.
+  // Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+  // refuses to spawn .cmd files without shell: true, returning EINVAL). Issue #144.
   const [cmd, ...args] = getInstallCommand(pm, "concurrently", true);
-  const result = spawnSync(resolveCommand(cmd), args, {
+  const result = safeSpawnSync(resolveCommand(cmd), args, {
     cwd: projectRoot,
     stdio: "pipe",
     timeout: 60_000,
@@ -637,10 +637,10 @@ async function runInitialFetch(
 ): Promise<boolean> {
   logger.step("fetch", "Fetching OpenAPI spec and generating types...");
 
-  // Drop `shell: true` (deprecated by Node 24 / DEP0190); resolveCommand
-  // handles the Windows `.cmd` shim path. Issue #16.
+  // Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+  // refuses to spawn .cmd files without shell: true, returning EINVAL). Issue #144.
   const [cmd, ...dlxArgs] = getDlxCommand(pm);
-  const result = spawnSync(resolveCommand(cmd), [...dlxArgs, "chowbea-axios", "fetch"], {
+  const result = safeSpawnSync(resolveCommand(cmd), [...dlxArgs, "chowbea-axios", "fetch"], {
     cwd: projectRoot,
     stdio: "pipe",
   });

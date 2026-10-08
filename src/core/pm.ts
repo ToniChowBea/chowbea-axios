@@ -3,6 +3,8 @@
  * Shared across init, generate, and fetch commands.
  */
 
+import spawnCross from "cross-spawn";
+import type { SpawnSyncOptions } from "node:child_process";
 import { spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
@@ -127,4 +129,28 @@ export function commandExists(cmd: string): boolean {
 	const probe = process.platform === "win32" ? "where.exe" : "which";
 	const result = spawnSync(probe, [cmd], { stdio: "pipe" });
 	return result.status === 0;
+}
+
+/**
+ * Safe spawn wrapper for package-manager commands that may be `.cmd`/`.bat`
+ * shims on Windows.
+ *
+ * On Windows with Node >= 20.12, spawning `.cmd`/`.bat` files directly fails
+ * with EINVAL (CVE-2024-27980 hardening). This wrapper uses `cross-spawn`,
+ * which detects .cmd/.bat targets and escapes arguments correctly for
+ * cmd.exe, preventing shell injection while working around the EINVAL issue.
+ *
+ * On non-Windows platforms, this is a direct pass-through to spawnSync.
+ *
+ * Issue #144.
+ */
+export function safeSpawnSync(
+	cmd: string,
+	args: ReadonlyArray<string> = [],
+	options?: SpawnSyncOptions
+): ReturnType<typeof spawnCross.sync> {
+	// cross-spawn handles Windows .cmd/.bat shims safely by detecting them and
+	// escaping arguments correctly for cmd.exe when needed. On non-Windows, it's
+	// a pass-through to child_process.spawn.
+	return spawnCross.sync(cmd, args, options);
 }

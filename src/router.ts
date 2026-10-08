@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
-import { commandExists, resolveCommand } from "./core/pm.js";
+import { commandExists, resolveCommand, safeSpawnSync } from "./core/pm.js";
 import {
 	decideDelegation,
 	findRunningPackageRoot,
@@ -28,11 +29,11 @@ function relaunchWithBun(argv: string[]): boolean {
 	const binDir = resolve(dirname(thisFile), "..", "bin");
 	const tsEntry = resolve(binDir, "chowbea-axios.ts");
 
-	// No `shell: true` — user argv flows through here, and shell metacharacters
-	// in user-supplied args (e.g. paths from automation) would otherwise be
-	// interpreted by the shell. resolveCommand handles Windows .cmd shims.
-	// Issue #16.
-	const result = spawnSync(resolveCommand("bun"), [tsEntry, ...argv.slice(2)], {
+	// Use safeSpawnSync to handle Windows .cmd shims correctly (Node >= 20.12
+	// refuses to spawn .cmd files without shell, returning EINVAL). User argv
+	// flows through; cross-spawn escapes args correctly for cmd.exe when needed,
+	// preventing shell injection. Issue #144.
+	const result = safeSpawnSync(resolveCommand("bun"), [tsEntry, ...argv.slice(2)], {
 		stdio: "inherit",
 		env: process.env,
 	});
@@ -44,7 +45,34 @@ function relaunchWithBun(argv: string[]): boolean {
 		);
 		return false;
 	}
-	process.exit(result.status ?? 0);
+	
+	// Propagate child exit status correctly: if the child was killed by a signal,
+	// re-raise the signal on the parent so we terminate the same way instead of
+	// masking it as a clean (exit 0) success. Fall back to exit code 128 + signal
+	// if the re-raise doesn't terminate us immediately (Windows, async signals).
+	// Issue #105.
+	if (typeof result.status === "number") {
+		process.exit(result.status);
+	}
+	if (result.signal) {
+		process.kill(process.pid, result.signal);
+		// If we're still here, re-raising didn't terminate us (Windows, or signal
+		// handlers). Exit with 128 + signal number (standard convention), or 1 if
+		// the signal number is unknown.
+		const signalNum = getSignalNumber(result.signal);
+		process.exit(signalNum !== null ? 128 + signalNum : 1);
+	}
+	// Unknown failure (no status, no signal).
+	process.exit(1);
+}
+
+/**
+ * Get the numeric signal value for a signal name (e.g., "SIGTERM" -> 15).
+ * Returns null if the signal name is unknown or unavailable on this platform.
+ * Exported for testing.
+ */
+export function getSignalNumber(signalName: string): number | null {
+	return constants.signals[signalName as keyof typeof constants.signals] ?? null;
 }
 
 /**
@@ -86,9 +114,12 @@ function maybeDelegateToLocal(argv: string[]): void {
 	}
 	if (result.signal) {
 		// The child was killed by a signal — re-raise it so we terminate the
-		// same way instead of masking it as a clean (exit 0) success.
+		// same way instead of masking it as a clean (exit 0) success. Fall back
+		// to exit code 128 + signal if the re-raise doesn't terminate us
+		// immediately (Windows, async signals). Issue #105.
 		process.kill(process.pid, result.signal);
-		return;
+		const signalNum = getSignalNumber(result.signal);
+		process.exit(signalNum !== null ? 128 + signalNum : 1);
 	}
 	process.exit(1);
 }

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { executeGenerate } from "../src/core/actions/generate.js";
 import { DEFAULT_CONFIG, generateConfigTemplate, getOutputPaths } from "../src/core/config.js";
@@ -20,12 +20,21 @@ import { SILENT_LOGGER } from "./helpers/logger.js";
 
 const PETSTORE_SPEC = readFileSync(new URL("./fixtures/petstore.json", import.meta.url), "utf8");
 
+// Safety net: ensure cwd is always restored to project root after each test.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
+
 async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	const orig = process.cwd();
 	process.chdir(dir);
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }
