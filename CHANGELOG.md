@@ -4,6 +4,13 @@ All notable changes to `chowbea-axios` will be documented in this file.
 
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) from `2.0.0` onward. Entries are generated automatically by [release-please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/). See [SECURITY.md](SECURITY.md) for the supported-versions policy.
 
+## [3.0.1](https://github.com/ToniChowBea/chowbea-axios/compare/v3.0.0...v3.0.1) (2026-10-08)
+
+
+### Fixed
+
+* spawn Windows .cmd shims safely via cross-spawn and propagate signal exits ([#152](https://github.com/ToniChowBea/chowbea-axios/issues/152)) ([c040f07](https://github.com/ToniChowBea/chowbea-axios/commit/c040f0757bf91a784702890e1d2528da1cd666f4)), closes [#144](https://github.com/ToniChowBea/chowbea-axios/issues/144) [#105](https://github.com/ToniChowBea/chowbea-axios/issues/105)
+
 ## [3.0.0](https://github.com/ToniChowBea/chowbea-axios/compare/v2.7.1...v3.0.0) (2026-09-20)
 
 
