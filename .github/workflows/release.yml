@@ -28,7 +28,7 @@
 #   2. Find the "Trusted Publisher" section → Add publisher.
 #   3. Fill in (primary, required for every release):
 #        Publisher:           GitHub Actions
-#        Organization or user: oddFEELING
+#        Organization or user: ToniChowBea
 #        Repository:          chowbea-axios
 #        Workflow filename:   release-please.yml
 #        Environment name:    (leave blank — we don't use GitHub Environments)

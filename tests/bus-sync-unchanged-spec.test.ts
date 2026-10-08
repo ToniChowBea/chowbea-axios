@@ -40,6 +40,14 @@ afterEach(() => {
 	server = null;
 });
 
+// Safety net: ensure cwd is always restored to project root after each test.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
+
 /** Serves whichever manifest `current()` returns at request time — lets a test flip versions mid-run. */
 function serveDynamic(current: () => object): Promise<string> {
 	return new Promise((resolve) => {
@@ -80,6 +88,7 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }

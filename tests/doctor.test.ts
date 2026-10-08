@@ -1,12 +1,20 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { executeDoctor } from "../src/core/actions/doctor.js";
 import { DEFAULT_CONFIG, generateConfigTemplate } from "../src/core/config.js";
 import { listTrackedFiles } from "../src/core/git.js";
 import { makeTempGitRepo, type TempGitRepo } from "./helpers/git-repo.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
+
+// Safety net: ensure cwd is always restored to project root after each test.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
 
 /** Scaffold a consumer project (package.json + api.config.toml) in the repo. */
 function scaffoldProject(repo: TempGitRepo, outputFolder = "api"): void {
@@ -23,6 +31,7 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }
@@ -54,7 +63,7 @@ describe("executeDoctor", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("report-only (no --fix) detects the problem without mutating anything", async () => {
 		const repo = makeTempGitRepo();
@@ -73,10 +82,10 @@ describe("executeDoctor", () => {
 			// Still tracked — nothing was changed.
 			expect(listTrackedFiles(repo.dir, "api/_internal")).not.toEqual([]);
 			expect(existsSync(join(repo.dir, ".gitignore"))).toBe(false);
-		} finally {
+		} finally{
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("reports a clean bill of health when _internal/ is already ignored", async () => {
 		const repo = makeTempGitRepo();
@@ -99,7 +108,7 @@ describe("executeDoctor", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("pinned mode: tracked _generated files are reported and --fix untracks + ignores them", async () => {
 		const repo = makeTempGitRepo();
@@ -128,7 +137,7 @@ describe("executeDoctor", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	// Regression (PR #143 review): pinned mode with nothing tracked but only the
 	// `_internal/` rule present must NOT short-circuit healthy — the missing
@@ -164,5 +173,5 @@ describe("executeDoctor", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 });

@@ -19,6 +19,14 @@ function entry(name: string, declaration: string, source = "src/types.chowbea.ts
 const servers: Server[] = [];
 afterEach(() => { for (const s of servers.splice(0)) s.close(); });
 
+// Safety net: ensure cwd is always restored to project root after each test.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
+
 /** Serves the spec at /openapi.json and the manifest at /bus.json; records bus request headers. */
 function serveBackend(spec: string, manifestJson: string, seenBusHeaders: Record<string, string | string[] | undefined>[] = []): Promise<string> {
 	return new Promise((resolve) => {
@@ -80,6 +88,7 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }
