@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { executeInit, type PromptProvider } from "../src/core/actions/init.js";
 import { DEFAULT_CONFIG, generateConfigTemplate } from "../src/core/config.js";
+import { createDeadServer } from "./helpers/dead-server.js";
 import { makeTempGitRepo } from "./helpers/git-repo.js";
 import { SILENT_LOGGER } from "./helpers/logger.js";
 
@@ -37,6 +38,7 @@ async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 
 describe("init --pinned (non-interactive)", () => {
 	it("scaffolds pinned config, gitignore entries, both workflows; first sync warns on dead endpoint", async () => {
+		const { server, url } = await createDeadServer();
 		const repo = makeTempGitRepo();
 		try {
 			repo.write("package.json", JSON.stringify({ name: "consumer", version: "0.0.0" }));
@@ -48,7 +50,7 @@ describe("init --pinned (non-interactive)", () => {
 						baseUrlEnv: "API_BASE_URL", envAccessor: "import.meta.env", tokenKey: "token",
 						authMode: "none", withCredentials: false, timeout: 10000,
 						nonInteractive: true, pinned: true,
-						specSource: { kind: "remote", endpoint: "http://127.0.0.1:1/openapi.json" },
+						specSource: { kind: "remote", endpoint: `${url}/openapi.json` },
 						outputFolder: "src/api", packageManager: "npm",
 					},
 					SILENT_LOGGER,
@@ -60,7 +62,7 @@ describe("init --pinned (non-interactive)", () => {
 			expect(result.initialSyncSuccess).toBe(false); // endpoint unreachable → warned, not thrown
 
 			const config = toml.parse(readFileSync(join(repo.dir, "api.config.toml"), "utf8")) as Record<string, unknown>;
-			expect(config.api_endpoint).toBe("http://127.0.0.1:1/openapi.json");
+			expect(config.api_endpoint).toBe(`${url}/openapi.json`);
 			expect(config.spec_file).toBe("openapi.json");
 
 			const gitignore = readFileSync(join(repo.dir, ".gitignore"), "utf8");
@@ -72,6 +74,7 @@ describe("init --pinned (non-interactive)", () => {
 			expect(existsSync(join(repo.dir, ".github/workflows/chowbea-pinned-ci.yml"))).toBe(true);
 			expect(existsSync(join(repo.dir, ".github/workflows/chowbea-axios-ci.yml"))).toBe(false);
 		} finally {
+			server.close();
 			repo.cleanup();
 		}
 	}, 10_000);
@@ -115,7 +118,7 @@ describe("init --pinned (non-interactive)", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 10_000);
 
 	// Regression (PR #143 review): when an existing config's overwrite is
 	// declined, every later step must follow the PERSISTED config's mode, not
