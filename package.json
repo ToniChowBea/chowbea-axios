@@ -48,6 +48,7 @@
     "@inquirer/prompts": "^8.4.3",
     "@opentui/core": "^0.5.3",
     "@opentui/react": "^0.5.3",
+    "cross-spawn": "^7.0.6",
     "openapi-typescript": "^7.13.0",
     "openapi-typescript-helpers": "^0.1.0",
     "picocolors": "^1.1.1",
@@ -56,6 +57,7 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.14",
     "esbuild": "^0.28.2",
