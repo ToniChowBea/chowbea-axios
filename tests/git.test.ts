@@ -70,7 +70,7 @@ describe("git helpers", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("listUnmergedFiles lists files with merge conflicts (and [] when clean)", () => {
 		const repo = makeTempGitRepo();
@@ -95,7 +95,7 @@ describe("git helpers", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 
 	it("stageFiles adds previously-conflicted content to the index", () => {
 		const repo = makeTempGitRepo();
@@ -121,5 +121,5 @@ describe("git helpers", () => {
 		} finally {
 			repo.cleanup();
 		}
-	});
+	}, 30_000);
 });

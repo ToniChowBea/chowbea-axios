@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import toml from "toml";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { executeInit, type PromptProvider } from "../src/core/actions/init.js";
 import { DEFAULT_CONFIG, generateConfigTemplate } from "../src/core/config.js";
@@ -15,12 +15,22 @@ const NO_PROMPTS = {
 	password: () => { throw new Error("unexpected prompt in non-interactive init"); },
 } as unknown as PromptProvider;
 
+// Safety net: ensure cwd is always restored to project root after each test.
+// This prevents leaked state if a test times out or cleanup executes out of order.
+const PROJECT_ROOT = process.cwd();
+afterEach(() => {
+	if (process.cwd() !== PROJECT_ROOT) {
+		process.chdir(PROJECT_ROOT);
+	}
+});
+
 async function inDir<T>(dir: string, fn: () => Promise<T>): Promise<T> {
 	const orig = process.cwd();
 	process.chdir(dir);
 	try {
 		return await fn();
 	} finally {
+		// Restore cwd before any cleanup that might delete directories.
 		process.chdir(orig);
 	}
 }

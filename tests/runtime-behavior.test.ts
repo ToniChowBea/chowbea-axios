@@ -222,23 +222,28 @@ describe("logger formatValue (#44 — Windows path detection)", () => {
 describe("ProcessManager output append (#35)", () => {
 	it("preserves blank lines mid-output instead of stripping them all", async () => {
 		// We test the appendOutput logic indirectly by importing the module
-		// and exercising its public `run` method against a fake child.
-		// Since ProcessManager spawns a real shell command, we use a
-		// trivial command that prints a known sequence to stdout.
+		// and exercising its public `run` method against a real child process.
+		// Use a portable Node.js child that prints a known sequence to stdout
+		// (avoiding shell-specific printf behavior differences on Windows).
 		const { processManager } = await import(
 			"../src/tui/services/process-manager.js"
 		);
-		// Use `printf` so we control exact bytes: line, blank, line, line.
 		const id = processManager.run(
-			{ name: "test", command: 'printf "a\\n\\nb\\nc\\n"' },
+			{
+				name: "test",
+				command: 'node -e "console.log(\'a\');console.log(\'\');console.log(\'b\');console.log(\'c\')"',
+			},
 			"/",
 		);
-		// Wait briefly for the child to finish.
-		await new Promise((resolve) => setTimeout(resolve, 200));
-		const proc = processManager
-			.getProcesses()
-			.find((p) => p.id === id);
+		// Wait for the child to exit by polling process status.
+		let proc = processManager.getProcesses().find((p) => p.id === id);
+		const deadline = Date.now() + 5000;
+		while (proc && proc.status === "running" && Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			proc = processManager.getProcesses().find((p) => p.id === id);
+		}
 		expect(proc).toBeDefined();
+		expect(proc?.status).not.toBe("running");
 		const texts = proc?.output.map((l) => l.text) ?? [];
 		// Mid-output blank line should be preserved between "a" and "b".
 		expect(texts).toContain("");
@@ -247,7 +252,7 @@ describe("ProcessManager output append (#35)", () => {
 		expect(texts).toContain("c");
 		// Cleanup: remove the process record.
 		processManager.remove(id);
-	});
+	}, 10_000);
 });
 
 describe("watch loop backoff (#34)", () => {
