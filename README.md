@@ -100,6 +100,8 @@ src/api/
 | `diff` | Compare cached vs new spec; flags schema/parameter/response changes |
 | `plugins` | Manage Vite codegen plugins (Surfaces, Side Panels) |
 | `extract` | Extract Type Bus types into chowbea.bus.json (run in the API repo) |
+| `resolve` | Resolve merge conflicts in generated files by regenerating from spec |
+| `doctor` | Detect (and optionally repair) generated artifacts wrongly tracked in git |
 
 Run `chowbea-axios <command> --help` for command-specific flags.
 
@@ -251,7 +253,7 @@ file     = "chowbea.bus.json"                              # optional: pin the m
 | | |
 |---|---|
 | **Node** | `>=20` (declared in `engines`; tested in CI on 20 / 22 / 24 across Linux, macOS, Windows) |
-| **Module format** | **ESM only.** `package.json` declares `"type": "module"`. Importing from a CommonJS file with `require("chowbea-axios")` will fail with `ERR_REQUIRE_ESM`. CJS consumers should either use a dynamic `import()` or migrate the importing file to ESM. The `chowbea-axios` CLI binary is unaffected — it works regardless of your project's module format. |
+| **Module format** | **ESM only** for the CLI and core exports (`.`, `./vite`). The `chowbea-axios/api` export ships **both ESM and CommonJS** (`dist/api/index.js` and `dist/api/index.cjs`) so backend API servers (especially NestJS) can require it directly. The CLI binary works regardless of your project's module format. |
 | **Vite** | Optional peer dep, `>=5.0.0`. Only required if you use the `chowbea-axios/vite` codegen plugins. |
 | **Bun** | Required to launch the interactive TUI (the headless CLI works under Node alone). |
 

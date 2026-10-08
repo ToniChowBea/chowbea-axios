@@ -6,7 +6,7 @@ If you believe you've found a security vulnerability in `chowbea-axios`, please 
 
 **Preferred channel:** open a private security advisory on GitHub:
 
-> https://github.com/oddFEELING/chowbea-axios/security/advisories/new
+> https://github.com/ToniChowBea/chowbea-axios/security/advisories/new
 
 Alternatively, email **platforms@chowbea.com** with the subject line `[security] chowbea-axios`.
 
@@ -32,14 +32,15 @@ We will keep you informed throughout the process. If we determine the issue is o
 
 | Version | Supported |
 |---|---|
-| Latest `2.x` (published as `latest`) | ✅ |
+| Latest `3.x` (published as `latest`) | ✅ |
+| Latest `2.x` | ⚠️ — critical security fixes only |
 | Older `2.x` releases | ❌ — fix forward by upgrading |
 | `2.0.0-alpha.*` prereleases | ❌ — superseded by `2.0.0` stable |
 | `1.x` and earlier | ❌ |
 
-We support **only the latest `2.x` release** on the `latest` dist-tag. Security fixes are released as patch versions (e.g. `2.0.1`); older `2.x` releases do not receive backports. The recommended response to a security advisory is to upgrade to the latest `2.x`.
+We support **only the latest `3.x` release** on the `latest` dist-tag. Security fixes are released as patch versions (e.g. `3.0.1`); older `3.x` releases do not receive backports. The recommended response to a security advisory is to upgrade to the latest `3.x`.
 
-When `3.x` ships, this policy will be revisited to add a defined support window for `2.x`.
+The latest `2.x` release receives critical security fixes only, with no guarantee of timeliness. All other `2.x` releases are unsupported. Users on `2.x` should upgrade to `3.x`.
 
 ## Scope
 
