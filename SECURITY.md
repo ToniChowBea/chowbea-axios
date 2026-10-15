@@ -14,7 +14,7 @@ Please include:
 
 - A description of the issue and its potential impact
 - Steps to reproduce, ideally with a minimal proof-of-concept
-- The version of `chowbea-axios` affected (e.g. `2.0.0-alpha.21`)
+- The version of `chowbea-axios` affected (e.g. `3.0.0`)
 - Your assessment of severity, if known
 
 ### Response timeline
@@ -24,7 +24,7 @@ Please include:
 | Acknowledgement | **Within 7 days** of receiving the report |
 | Initial triage and severity assessment | Within 14 days |
 | Fix released or mitigation published | Best effort — typically within 30 days for High/Critical; longer for low-severity issues that require breaking changes |
-| Public disclosure | Coordinated with the reporter, usually once a fix is available on the latest supported alpha |
+| Public disclosure | Coordinated with the reporter, usually once a fix is available on the latest supported release |
 
 We will keep you informed throughout the process. If we determine the issue is out of scope (e.g. it affects a dependency we don't ship, or a configuration the user controls), we will explain why.
 
@@ -33,14 +33,13 @@ We will keep you informed throughout the process. If we determine the issue is o
 | Version | Supported |
 |---|---|
 | Latest `3.x` (published as `latest`) | ✅ |
-| Latest `2.x` | ⚠️ — critical security fixes only |
-| Older `2.x` releases | ❌ — fix forward by upgrading |
+| `2.x` | ❌ — upgrade to 3.x |
 | `2.0.0-alpha.*` prereleases | ❌ — superseded by `2.0.0` stable |
 | `1.x` and earlier | ❌ |
 
 We support **only the latest `3.x` release** on the `latest` dist-tag. Security fixes are released as patch versions (e.g. `3.0.1`); older `3.x` releases do not receive backports. The recommended response to a security advisory is to upgrade to the latest `3.x`.
 
-The latest `2.x` release receives critical security fixes only, with no guarantee of timeliness. All other `2.x` releases are unsupported. Users on `2.x` should upgrade to `3.x`.
+All `2.x` releases are unsupported; users on `2.x` should upgrade to `3.x`.
 
 ## Scope
 
