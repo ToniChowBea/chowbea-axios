@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { interpolateEnvVars } from "../src/core/fetcher.js";
+import { createDeadServer } from "./helpers/dead-server.js";
 
 describe("interpolateEnvVars (#29 — mismatched-brace regex)", () => {
 	it("substitutes ${VAR} (braced)", () => {
@@ -113,18 +114,23 @@ describe("fetchOpenApiSpec URL validation (#20 — SSRF / scheme allowlist)", ()
 	});
 
 	it("accepts http: scheme (validation passes; fetch will fail at network)", async () => {
-		const { fetchOpenApiSpec } = await import("../src/core/fetcher.js");
-		// Validation should NOT throw a "scheme" error — the eventual error
-		// will be a NetworkError from the unreachable host, after retries.
-		// We just verify the rejection isn't a scheme rejection.
-		await expect(
-			fetchOpenApiSpec({
-				...baseOpts("http://127.0.0.1:1/never-here"),
-				retryConfig: { maxAttempts: 1, baseDelay: 1, backoffMultiplier: 1 },
-			}),
-		).rejects.toThrow();
-		// (No assertion on the exact message — any error other than
-		// "Unsupported URL scheme" / "Invalid endpoint URL" passes the
-		// scheme/format check.)
+		const { server, url } = await createDeadServer();
+		try {
+			const { fetchOpenApiSpec } = await import("../src/core/fetcher.js");
+			// Validation should NOT throw a "scheme" error — the eventual error
+			// will be a NetworkError from the unreachable host, after retries.
+			// We just verify the rejection isn't a scheme rejection.
+			await expect(
+				fetchOpenApiSpec({
+					...baseOpts(`${url}/never-here`),
+					retryConfig: { maxAttempts: 1, baseDelay: 1, backoffMultiplier: 1 },
+				}),
+			).rejects.toThrow();
+			// (No assertion on the exact message — any error other than
+			// "Unsupported URL scheme" / "Invalid endpoint URL" passes the
+			// scheme/format check.)
+		} finally {
+			server.close();
+		}
 	});
 });
